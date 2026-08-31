@@ -1,4 +1,5 @@
 import { finalizeContent, getProductFacts } from "@/lib/ecommerce-agent/tools";
+import { buildContentPackage } from "@/lib/ecommerce-agent/content-package";
 import type { EcommerceAgentErrorCode, EcommerceAgentRequest, EcommerceAgentResult, EcommerceProductFacts, EcommerceTaskType } from "@/types/ecommerce-agent";
 
 type ToolCall = { id?: string; type?: string; function?: { name?: string; arguments?: string } };
@@ -55,7 +56,7 @@ function firstToolCall(message: ModelMessage, name: string) {
 }
 
 function requestIsValid(request: EcommerceAgentRequest): boolean {
-  return Boolean(request.skuId && taskLabels[request.taskType] && [request.style, request.audience, request.scene, request.length, request.requirements].every((value) => value === undefined || (typeof value === "string" && value.length <= 500)));
+  return Boolean(request.skuId && taskLabels[request.taskType] && [request.style, request.audience, request.scene, request.length, request.requirements, request.referenceText, request.customStyle].every((value) => value === undefined || (typeof value === "string" && value.length <= 3000)) && (!request.sellingPoints || (Array.isArray(request.sellingPoints) && request.sellingPoints.length <= 3)));
 }
 
 function systemPrompt() {
@@ -89,15 +90,16 @@ export async function runEcommerceAgent(request: EcommerceAgentRequest, model: E
   if (!candidateContent || candidateContent.length > 2400) throw new EcommerceAgentError("tool_failed");
   workflow.push({ id: "generate_candidate", label: "生成候选内容", status: "completed", detail: "DeepSeek 已通过 Function Calling 提交候选文案。" });
   const result = finalizeContent(candidateContent, facts, request.taskType);
+  const contentPackage = buildContentPackage(facts, request, candidateContent);
   workflow.push({ id: "validate_product_claims", label: "参数一致性校验", status: "completed", detail: result.validation.passed ? "SKU、规格、包装与价格均与商品事实一致。" : `发现 ${result.validation.issues.length} 个参数问题。` });
   workflow.push({ id: "scan_content_risk", label: "风险审核", status: "completed", detail: result.riskReview.level === "low" ? "未发现明显风险。" : `风险等级：${result.riskReview.level === "block" ? "阻止发布" : "需注意"}。` });
-  workflow.push({ id: "finalize_content", label: "生成结构化结果", status: "completed", detail: result.status === "ready_for_review" ? "待人工确认。" : "需要修订后再进入人工确认。" });
-  return { ...result, workflow };
+  workflow.push({ id: "finalize_content", label: "生成结构化结果", status: "completed", detail: result.status === "ready_for_review" ? "已生成内容策略、脚本、拍摄与审核方案，待人工确认。" : "需要修订后再进入人工确认。" });
+  return { ...result, workflow, contentPackage };
 }
 
 export function isEcommerceAgentResult(value: unknown): value is EcommerceAgentResult {
   const result = value as Partial<EcommerceAgentResult>;
-  return Boolean(result && typeof result.generatedContent === "string" && result.product && typeof result.product.skuId === "string" && result.validation && typeof result.validation.passed === "boolean" && Array.isArray(result.validation.issues) && result.riskReview && ["low", "attention", "block"].includes(result.riskReview.level ?? "") && ["ready_for_review", "needs_revision", "blocked"].includes(result.status ?? "") && Array.isArray(result.workflow));
+  return Boolean(result && typeof result.generatedContent === "string" && result.product && typeof result.product.skuId === "string" && result.validation && typeof result.validation.passed === "boolean" && Array.isArray(result.validation.issues) && result.riskReview && ["low", "attention", "block"].includes(result.riskReview.level ?? "") && ["ready_for_review", "needs_revision", "blocked"].includes(result.status ?? "") && Array.isArray(result.workflow) && (!result.contentPackage || Array.isArray(result.contentPackage.titles)));
 }
 
 export { taskLabels };

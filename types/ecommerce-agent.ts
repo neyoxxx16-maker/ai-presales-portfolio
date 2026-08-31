@@ -1,4 +1,7 @@
 export type EcommerceTaskType = "selling_points" | "xiaohongshu" | "product_detail" | "customer_service";
+export type ContentPlatform = "xiaohongshu" | "douyin" | "channels" | "feed" | "general";
+export type ContentGoal = "seeding" | "launch" | "education" | "brand" | "conversion" | "knowledge";
+export type StylePreset = "conversion" | "humor" | "education" | "xiaohongshu" | "story" | "premium" | "custom";
 
 export type EcommerceProductFacts = {
   skuId: string;
@@ -33,7 +36,17 @@ export type EcommerceAgentRequest = {
   scene?: string;
   length?: string;
   requirements?: string;
+  platform?: ContentPlatform;
+  goal?: ContentGoal;
+  sellingPoints?: string[];
+  duration?: "15" | "30" | "60" | "90";
+  referenceText?: string;
+  customStyle?: string;
 };
+
+export type ContentAngle = { title: string; rationale: string; score: { clickPotential: number; relevance: number; emotion: number; information: number; differentiation: number; brandFit: number; commercialValue: number; total: number } };
+export type VideoScene = { sceneNumber: number; duration: string; voiceover: string; visual: string; shotType: string; action: string; subtitle: string; transition: string; audio: string };
+export type ContentPackage = { strategy: { platform: ContentPlatform; goal: ContentGoal; audience: string; sellingPoints: string[]; style: StylePreset; styleProfile: string[] }; angles: ContentAngle[]; selectedAngle: ContentAngle; titles: Array<{ type: string; text: string }>; hooks: Array<{ type: string; text: string }>; copy: string; videoScript: { duration: string; scenes: VideoScene[] }; visualPlan: string[]; coverIdeas: Array<{ title: string; subject: string; composition: string; hierarchy: string }>; socialCards: Array<{ page: number; role: string; headline: string; content: string }>; ctas: Array<{ type: string; text: string }>; brandVoice: { passed: boolean; notes: string[] }; decisionSummary: string[] };
 
 export type EcommerceAgentResult = {
   taskType: EcommerceTaskType;
@@ -44,6 +57,7 @@ export type EcommerceAgentResult = {
   riskReview: RiskReview;
   status: "ready_for_review" | "needs_revision" | "blocked";
   workflow: AgentWorkflowStep[];
+  contentPackage?: ContentPackage;
 };
 
 export type EcommerceAgentErrorCode = "invalid_request" | "product_not_found" | "provider_unavailable" | "provider_timeout" | "provider_failed" | "provider_malformed" | "tool_failed";

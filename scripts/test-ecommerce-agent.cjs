@@ -10,6 +10,7 @@ require.extensions[".ts"] = function compileTypeScript(module, filename) { const
 
 const { getProductFacts, validateProductClaims, scanContentRisk, finalizeContent } = require("../lib/ecommerce-agent/tools.ts");
 const { EcommerceAgentError, isEcommerceAgentResult, runEcommerceAgent } = require("../lib/ecommerce-agent/orchestrator.ts");
+const { buildContentPackage } = require("../lib/ecommerce-agent/content-package.ts");
 
 async function main() {
   let passed = 0;
@@ -22,6 +23,15 @@ async function main() {
   passed += 1;
 
   const aligned = "明前龙井单罐，60g 单罐装。栗香与兰花香交织，入口鲜爽回甘，适合午后自饮。";
+  const styleCases = [["xiaohongshu", "seeding", "小红书种草"], ["douyin", "launch", "搞笑幽默"], ["general", "knowledge", "科普干货"], ["feed", "conversion", "信息流 / 强转化"], ["xiaohongshu", "seeding", "自定义风格"]];
+  for (const [platform, goal, style] of styleCases) {
+    const pkg = buildContentPackage(facts, { skuId: facts.skuId, taskType: "selling_points", platform, goal, style, customStyle: style === "自定义风格" ? "像朋友聊天，克制一点，不要满篇感叹号。" : undefined, duration: "30" }, aligned);
+    assert.equal(pkg.titles.length, 5, `${style} should generate five titles`);
+    assert.equal(pkg.hooks.length, 3, `${style} should generate three hooks`);
+    assert.ok(pkg.videoScript.scenes.length >= 3, `${style} should produce shot-level video scenes`);
+  }
+  passed += 1;
+
   assert.equal(validateProductClaims(aligned, facts).passed, true, "aligned facts should pass validation");
   passed += 1;
 
@@ -57,7 +67,7 @@ async function main() {
   for (const file of clientFiles) assert.equal(/DEEPSEEK_API_KEY|process\.env/.test(fs.readFileSync(path.join(projectRoot, file), "utf8")), false, `${file} must not expose server secrets`);
   passed += 1;
 
-  console.log(`Ecommerce Agent regression: ${passed}/8 passed`);
+  console.log(`Ecommerce Agent regression: ${passed}/9 passed`);
 }
 
 main().catch((error) => { console.error(error.message); process.exitCode = 1; });
