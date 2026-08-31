@@ -48,6 +48,12 @@ Phase 3 使用本地 Mock 数据验证 UI 与交互。Phase 3.5 已将旧 Mock �
 
 该知识库属于个人作品集 POC，不是品牌生产系统；不连接真实支付、库存、订单、物流或客户隐私数据。
 
+## Phase 4.0｜Hybrid RAG MVP
+
+Tea Assistant 保留 Phase 3.5 的结构化业务引擎来确定 SKU、价格、预算、数量计算与安全边界；对风味、冲泡、品牌和推荐理由等非结构化知识，服务端可使用本地 JSON 向量索引、cosine similarity 和真实 LLM 生成带引用的自然回答。模型输出经过结构化事实与引用校验；缺少密钥、索引、检索不足或 Provider 失败时，自动回退到 Phase 3.5 本地规则结果。
+
+配置 `.env` 后运行 `npm run build:tea-index` 建立本地向量索引。`.env.example` 仅提供变量模板，密钥不会进入浏览器或 Git。
+
 ## 当前阶段
 
 继续完成 Phase 3.5 的逻辑验收、自动化回归与构建验证。在这些检查全部稳定前，不进入下一阶段。

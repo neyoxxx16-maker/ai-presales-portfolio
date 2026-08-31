@@ -1,7 +1,7 @@
 import { BadgeInfo, CheckCircle2, CircleDashed } from "lucide-react";
 
-const current = ["基于项目资料整理的茶品、SKU、价格证据与来源注册表", "关键词、场景、规格与价格证据的本地规则检索", "POC 规则意图识别与结构化推荐展示", "无有效来源、资料冲突与未核验价格时明确兜底"];
-const later = ["接入企业真实商品资料与知识运营流程", "替换为 Embedding、Vector Search 或 pgvector", "接入真实大模型并增加服务端 API 与评测记录"];
+const current = ["基于项目资料整理的茶品、SKU、价格证据与来源注册表", "结构化业务规则优先处理价格、规格、预算与安全边界", "可选的本地向量索引、服务端实时 RAG 与引用校验", "缺少密钥、索引或资料不足时明确回退到本地规则结果"];
+const later = ["接入企业真实商品资料与知识运营流程", "增加部署环境中的真实索引构建与检索评测记录", "在不改变业务边界的前提下继续扩展后续能力"];
 
 export function PocNotice() {
   return (

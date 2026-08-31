@@ -121,7 +121,8 @@ export type RetrievedKnowledge = KnowledgeDocument & { score: number; matchReaso
 export type RetrievalResult = { products: RetrievedProduct[]; skus: RetrievedSku[]; prices: RetrievedPriceEvidence[]; knowledge: RetrievedKnowledge[] };
 
 export type ExecutionStep = { label: string; detail?: string; status: "completed" | "empty" | "pending" };
-export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; recommendationSkus?: RetrievedSku[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[] };
+export type TeaResponseMode = "live-rag" | "structured" | "fallback";
+export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; recommendationSkus?: RetrievedSku[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[]; mode?: TeaResponseMode };
 export type TeaConversationContext = { priorUserQueries?: string[]; priorAnswers?: TeaAnswer[] };
 export type PendingQuantityDialog = {
   intent: "quantity_price_calc";

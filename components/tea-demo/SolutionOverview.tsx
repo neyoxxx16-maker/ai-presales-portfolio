@@ -2,8 +2,8 @@ import { ArrowDown, BookOpenCheck, ClipboardList, Sparkles } from "lucide-react"
 
 const steps = [
   ["01", "需求识别", "提取预算、对象、场景、偏好和茶类。", ClipboardList],
-  ["02", "本地知识检索", "在项目资料整理的茶品、SKU、价格证据与知识条目中进行匹配。", BookOpenCheck],
-  ["03", "可追溯回答", "输出推荐理由，并展示本轮实际命中的资料来源。", Sparkles],
+  ["02", "混合知识检索", "结构化事实优先；配置后再以向量检索补充相关知识。", BookOpenCheck],
+  ["03", "可追溯回答", "模型只组织已检索资料，并展示本轮实际命中的资料来源。", Sparkles],
 ] as const;
 
 export function SolutionOverview() {
@@ -14,7 +14,7 @@ export function SolutionOverview() {
           <div>
             <p className="section-kicker">解决方案</p>
             <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">先理解需求，再给出有来源的商品建议。</h2>
-            <p className="mt-5 text-sm leading-7 text-neutral-500">当前为 POC：不调用真实大模型和向量数据库，但已将需求识别、检索与回答呈现拆为可替换的独立层。</p>
+            <p className="mt-5 text-sm leading-7 text-neutral-500">当前为 POC：价格、SKU 与推荐边界仍由规则引擎确定；实时 RAG 仅用于有来源的知识解释，并可安全回退。</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">
             {steps.map(([no, title, desc, Icon], index) => (
