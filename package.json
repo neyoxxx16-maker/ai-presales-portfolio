@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test:tea": "node scripts/test-tea-assistant.cjs",
     "test:rag": "node scripts/test-tea-rag.cjs",
+    "test:agent": "node scripts/test-ecommerce-agent.cjs",
     "build:tea-index": "node scripts/build-tea-index.cjs",
     "eval:tea-rag": "node scripts/eval-tea-rag.cjs"
   },

@@ -7,7 +7,8 @@
 - Phase 1：项目初始化 + 基础框架 + 首页视觉完成
 - Phase 2：在线简历页完成
 - Phase 3：一叶春山 AI 导购交互 POC 完成
-- Phase 3.5：Verified Project Knowledge Base 与最终逻辑验收进行中
+- Phase 3.5 / 4.1：Verified Project Knowledge Base、DeepSeek Live RAG 与茶叶导购稳定功能完成
+- Phase 5：电商 Agent Workflow Demo 完成
 
 ## 技术栈
 
@@ -41,6 +42,18 @@ npm run dev
 
 - `/` 首页
 - `/resume` 在线简历
+- `/demo/tea-assistant` 茶叶知识库导购
+- `/demo/ecommerce-agent` 电商内容生成与合规审核 Agent
+
+## Phase 5｜电商 Agent Workflow
+
+电商 Agent 复用 `data/tea/products.ts` 中的已验证 SKU 与价格事实，在服务端完成 DeepSeek Function Calling、商品事实读取、参数一致性校验、风险审核和结构化结果输出。模型只可依据工具返回的商品事实生成候选文案；产区、库存、销量、物流与功效等资料未提供项不得补充。最终结果始终处于人工审核状态，不会自动发布。
+
+可运行：
+
+```bash
+npm run test:agent
+```
 
 ## Phase 3.5｜Verified Project Knowledge Base
 
