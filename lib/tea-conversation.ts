@@ -1,6 +1,6 @@
 import { teaPriceEvidence, teaProducts, teaSkus } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
-import { buildTeaAnswer } from "@/lib/tea-response";
+import { buildStructuredSkuAnswer, buildTeaAnswer } from "@/lib/tea-response";
 import type { PendingQuantityDialog, TeaAnswer, TeaConversationContext, TeaConversationState, TeaSku, TeaTurnResult } from "@/types/tea";
 
 const unique = <T,>(items: T[]) => [...new Set(items)];
@@ -18,8 +18,14 @@ function knownPricesInText(query: string) {
 function isExplicitNewIntent(query: string) {
   const intent = classifyTeaIntent(query).intent;
   return /^(?:算了|另外|换个问题|不算了)/.test(query.trim())
-    || ["brewing_question", "brand_question", "aftersales", "gift_catalog", "product_browse"].includes(intent)
+    || ["brewing_question", "brand_question", "aftersales", "gift_catalog"].includes(intent)
     || /(?:是什么|适合什么人|保质期|怎么泡|冲泡|售后|退货|退款)/.test(query);
+}
+
+function isCandidateBrowseRequest(query: string) {
+  const normalized = query.replace(/\s/g, "").replace(/[？?。！!]+$/, "");
+  return /^(?:有哪些|有什么|给我看看|有哪些可选)(?:商品|产品|茶|可选商品|可选产品)?$/.test(normalized)
+    || /^(?:给我看看|看看)(?:有哪些|有什么)(?:商品|产品|茶|可选商品|可选产品)?$/.test(normalized);
 }
 
 function directProductSkus(productId: string) {
@@ -33,6 +39,18 @@ function matchesSkuSpecification(query: string, sku: TeaSku) {
     .some((value) => value.length >= 2 && normalized.includes(value));
 }
 
+function specificationInText(query: string) {
+  const match = query.toLowerCase().replace(/\s/g, "").match(/(\d+(?:\.\d+)?)(?:g|克)/);
+  return match ? `${match[1]}g` : undefined;
+}
+
+function joinProductNames(productIds: string[]) {
+  const names = unique(productIds.map((id) => teaProducts.find((product) => product.id === id)?.name).filter((name): name is string => Boolean(name)));
+  if (names.length < 2) return names.join("");
+  if (names.length === 2) return names.join("和");
+  return `${names.slice(0, -1).join("、")}和${names[names.length - 1]}`;
+}
+
 function quantityClarificationAnswer(productId?: string, candidates: TeaSku[] = []): TeaAnswer {
   if (!productId || !candidates.length) return buildTeaAnswer("500能买两盒吗？");
   const product = teaProducts.find((item) => item.id === productId);
@@ -41,6 +59,17 @@ function quantityClarificationAnswer(productId?: string, candidates: TeaSku[] = 
   return {
     ...sourceAnswer,
     answer: `${product?.name ?? "这款茶"}有不同规格。目前已录入的有 ${options}。你想算哪一种？`,
+    recommendations: [],
+    recommendationSkus: [],
+  };
+}
+
+function quantityProductClarificationAnswer(specification: string, candidates: TeaSku[]): TeaAnswer {
+  const products = joinProductNames(candidates.flatMap((sku) => sku.productIds));
+  const sourceAnswer = buildTeaAnswer(`${specification} 单罐`);
+  return {
+    ...sourceAnswer,
+    answer: `目前 ${specification} 单罐有${products}，你想要哪一款？`,
     recommendations: [],
     recommendationSkus: [],
   };
@@ -70,19 +99,25 @@ function createPendingQuantityDialog(query: string, answer: TeaAnswer): PendingQ
 
 function continueQuantityDialog(query: string, state: TeaConversationState): TeaTurnResult | undefined {
   const dialog = state.pendingDialog;
-  if (!dialog || isExplicitNewIntent(query)) return undefined;
+  if (!dialog) return undefined;
+  if (isCandidateBrowseRequest(query)) {
+    return { answer: buildTeaAnswer(query), state: { ...state, pendingDialog: dialog }, intent: classifyTeaIntent(query).intent };
+  }
+  if (isExplicitNewIntent(query)) return undefined;
   const classified = classifyTeaIntent(query);
   const directPrice = knownPricesInText(query);
   const slots = {
     ...dialog.slots,
     budget: classified.entities.budget ?? dialog.slots.budget,
     quantity: classified.entities.quantity ?? dialog.slots.quantity,
+    specification: specificationInText(query) ?? dialog.slots.specification,
     unitPrice: classified.entities.unitPrice ?? (directPrice.length === 1 ? directPrice[0] : dialog.slots.unitPrice),
   };
   const productId = classified.entities.productIds?.[0] ?? dialog.slots.productId;
   let candidates = (dialog.slots.candidateSkuIds ?? []).map((id) => teaSkus.find((sku) => sku.id === id)).filter((sku): sku is TeaSku => Boolean(sku));
   if (classified.entities.productIds?.length) candidates = directProductSkus(classified.entities.productIds[0]);
-  const selectedSku = candidates.find((sku) => matchesSkuSpecification(query, sku));
+  if (slots.specification) candidates = (candidates.length ? candidates : teaSkus).filter((sku) => matchesSkuSpecification(slots.specification!, sku));
+  const selectedSku = candidates.length === 1 ? candidates[0] : undefined;
 
   if (selectedSku) slots.unitPrice = priceForSku(selectedSku)?.amount;
   if (slots.unitPrice !== undefined && slots.quantity !== undefined && slots.budget !== undefined) {
@@ -92,6 +127,10 @@ function continueQuantityDialog(query: string, state: TeaConversationState): Tea
   if (productId && candidates.length > 1) {
     const nextDialog: PendingQuantityDialog = { intent: "quantity_price_calc", slots: { ...slots, productId, candidateSkuIds: candidates.map((sku) => sku.id) }, missingSlots: ["sku_specification"] };
     return { answer: quantityClarificationAnswer(productId, candidates), state: { pendingDialog: nextDialog }, intent: "quantity_price_calc" };
+  }
+  if (slots.specification && candidates.length > 1) {
+    const nextDialog: PendingQuantityDialog = { intent: "quantity_price_calc", slots: { ...slots, candidateSkuIds: candidates.map((sku) => sku.id) }, missingSlots: ["product_or_unit_price"] };
+    return { answer: quantityProductClarificationAnswer(slots.specification, candidates), state: { pendingDialog: nextDialog }, intent: "quantity_price_calc" };
   }
   const answer = buildTeaAnswer("500能买两盒吗？");
   return { answer, state: { pendingDialog: { intent: "quantity_price_calc", slots: { ...slots, productId }, missingSlots: ["product_or_unit_price"] } }, intent: "quantity_price_calc" };
@@ -114,9 +153,29 @@ function candidateGiftFollowUp(state: TeaConversationState): TeaAnswer | undefin
   };
 }
 
+function recentCandidateSkus(state: TeaConversationState, context?: TeaConversationContext) {
+  const stateCandidates = (state.lastCandidateSkuIds ?? []).map((id) => teaSkus.find((sku) => sku.id === id)).filter((sku): sku is TeaSku => Boolean(sku));
+  if (stateCandidates.length) return stateCandidates;
+  const priorCandidates = [...(context?.priorAnswers ?? [])].reverse().find((answer) => answer.recommendationSkus?.length)?.recommendationSkus ?? [];
+  return priorCandidates.map((sku) => teaSkus.find((candidate) => candidate.id === sku.id)).filter((sku): sku is TeaSku => Boolean(sku));
+}
+
+function ordinalSkuFollowUp(query: string, state: TeaConversationState, context?: TeaConversationContext): TeaTurnResult | undefined {
+  const match = query.replace(/\s/g, "").match(/第([一二三四五六七八九十1-9])(?:种|款|个|盒)?/);
+  if (!match) return undefined;
+  const ordinalMap: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+  const position = /^\d$/.test(match[1]) ? Number(match[1]) : ordinalMap[match[1]];
+  const candidates = recentCandidateSkus(state, context);
+  const sku = candidates[position - 1];
+  if (!sku) return undefined;
+  return { answer: buildStructuredSkuAnswer(sku, `上下文指代：第${match[1]}种候选`), state: { ...state, lastCandidateSkuIds: candidates.map((candidate) => candidate.id) }, intent: "product_question" };
+}
+
 export function processTeaTurn(query: string, state: TeaConversationState = {}, context?: TeaConversationContext): TeaTurnResult {
   const continued = continueQuantityDialog(query, state);
   if (continued) return continued;
+  const ordinalFollowUp = ordinalSkuFollowUp(query, state, context);
+  if (ordinalFollowUp) return ordinalFollowUp;
 
   const freshState = isExplicitNewIntent(query) ? {} : state;
   if (freshState.lastRecommendationQuery && isRecommendationConstraintUpdate(query)) {

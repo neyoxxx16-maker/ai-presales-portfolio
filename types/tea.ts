@@ -126,7 +126,7 @@ export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; r
 export type TeaConversationContext = { priorUserQueries?: string[]; priorAnswers?: TeaAnswer[] };
 export type PendingQuantityDialog = {
   intent: "quantity_price_calc";
-  slots: { budget?: number; quantity?: number; productId?: string; unitPrice?: number; candidateSkuIds?: string[] };
+  slots: { budget?: number; quantity?: number; productId?: string; specification?: string; unitPrice?: number; candidateSkuIds?: string[] };
   missingSlots: Array<"product_or_unit_price" | "sku_specification">;
 };
 export type TeaConversationState = {

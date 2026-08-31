@@ -29,8 +29,8 @@ export function TeaChat() {
     const question = input.trim();
     if (!question || isSending) return;
     const conversationContext = {
-      priorUserQueries: messages.filter((message) => message.role === "user").map((message) => message.content),
-      priorAnswers: messages.flatMap((message) => message.answer ? [message.answer] : []),
+      priorUserQueries: messages.filter((message) => message.role === "user").map((message) => message.content).slice(-6),
+      priorAnswers: messages.flatMap((message) => message.answer ? [message.answer] : []).slice(-6),
     };
     setIsSending(true);
     let turn = processTeaTurn(question, conversationState, conversationContext);

@@ -86,4 +86,4 @@ async function main() {
   console.log("Tea RAG regression: 25/25 passed");
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+main().then(() => localEmbeddings.closeLocalEmbeddingWorker()).catch((error) => { localEmbeddings.closeLocalEmbeddingWorker(); console.error(error.message); process.exitCode = 1; });

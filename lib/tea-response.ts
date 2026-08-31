@@ -67,6 +67,26 @@ function pricesForAmounts(amounts: number[]) { return teaPriceEvidence.filter((p
 function skuForPrice(price: PriceEvidence) { return teaSkus.find((sku) => sku.priceEvidenceIds?.includes(price.id)); }
 function asRetrievedSku(sku: TeaSku, reason: string): RetrievedSku { return { ...sku, score: 100, matchReasons: [reason] }; }
 
+export function buildStructuredSkuAnswer(sku: TeaSku, detail = "读取已确认 SKU") : TeaAnswer {
+  const teaNames = sku.productIds.map((id) => teaProducts.find((product) => product.id === id)?.name).filter((name): name is string => Boolean(name));
+  const price = priceForSku(sku);
+  const priceText = price ? `，${priceAmountText(price)}${price.originalPrice ? `，划线价 ¥${price.originalPrice}` : ""}` : "";
+  return {
+    answer: `${sku.name}包含${teaNames.join("和")}。规格为${sku.spec}，净含量${sku.netContent}，包装为${sku.packaging}${priceText}。以上事实只对应这一具体商品。`,
+    recommendations: [], recommendationSkus: [asRetrievedSku(sku, "已确认 SKU 事实")], sources: sourceById("KB006"), execution: completedExecution("product_question", `结构化 SKU · ${detail}`, 1, 1),
+  };
+}
+
+function giftBoxNetContentAnswer(): TeaAnswer {
+  const giftSkus = teaSkus.filter((sku) => sku.packaging === "礼盒");
+  const rows = giftSkus.map((sku) => `${sku.name}：${sku.spec}，${sku.netContent}`);
+  const snapshotGiftRows = teaPriceEvidence.filter((price) => price.packaging === "礼盒" && !skuForPrice(price)).map((price) => `${price.skuName}：${price.netContent}（销售页面资料）`);
+  return {
+    answer: `已确认的礼盒净含量如下：\n- ${[...rows, ...snapshotGiftRows].join("\n- ")}\n60g对应明前龙井、龙井红茶、桂花龙井和桂花红茶的单盒 / 单罐装，不是礼盒规格。若你想比较某一款礼盒的价格或组成，请告诉我具体名称。`,
+    recommendations: productsForSkus(giftSkus), recommendationSkus: giftSkus.map((sku) => asRetrievedSku(sku, "已确认礼盒净含量")), sources: sourceById("KB006"), execution: completedExecution("product_question", "汇总已确认礼盒净含量", 1, giftSkus.length),
+  };
+}
+
 function productsForSkus(skus: TeaSku[]): RetrievedProduct[] {
   const productIds = unique(skus.flatMap((sku) => sku.productIds));
   return productIds.map((id) => teaProducts.find((product) => product.id === id)).filter((product): product is TeaProduct => Boolean(product)).map((product) => ({ ...product, relatedSkus: teaSkus.filter((sku) => sku.productIds.includes(product.id)), score: 100, matchReasons: ["用于本轮推荐"] }));
@@ -233,6 +253,8 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "降血糖", "血糖", "糖尿病", "医疗功效", "保健", "保健作用", "功效"])) return { answer: "我不能对茶品作医疗、治疗或保健功效承诺，当前资料也没有经过验证的相关依据。你可以继续查看已知的风味、原料、冲泡方式、规格和价格信息；如有健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗与保健功效边界", 1, 0) };
   if (includesAny(normalized, ["其他客户", "别的客户", "别的客人", "客户订单", "客人订单", "订单信息", "购买记录", "手机号", "电话", "联系方式", "地址", "身份信息", "隐私", "修改订单", "取消订单", "真实物流", "支付"])) return { answer: "我不能提供其他客户的订单、手机号、地址、联系方式、身份信息、购买记录或任何客户隐私数据，也不连接真实订单、支付或物流系统。若咨询你自己的订单或售后，请通过人工客服在授权范围内核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "隐私与授权边界", 1, 0) };
   if (includesAny(normalized, ["保质期", "18个月", "24个月"]) && includesAny(normalized, ["龙井红茶", "梅枞天红"])) return { answer: "现有资料中，龙井红茶 / 梅枞天红的保质期存在18个月和24个月两个版本。为避免误导，需要先确认具体 SKU、批次或实物标签；无法确认时应由人工客服协助核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB004", "KB009"), execution: completedExecution("product_question", "识别到保质期版本冲突", 2, 0) };
+  if (includesAny(normalized, ["礼盒", "双拼", "双盒"]) && includesAny(normalized, ["净含量", "多少克", "多重"])) return giftBoxNetContentAnswer();
+  if (normalized.includes("双拼") && normalized.includes("桂花") && includesAny(normalized, ["里面", "分别", "什么茶", "组成"])) return buildStructuredSkuAnswer(teaSkus.find((sku) => sku.id === "osmanthus-duo-gift")!, "匹配桂花双拼礼盒组成");
 
   if (intentResult.intent === "price_compare") {
     const answer = priceComparisonAnswer(entities.priceAmounts ?? []);

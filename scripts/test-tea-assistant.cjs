@@ -136,6 +136,26 @@ assert.ok(quantityTurn3.answer.answer.includes("剩余 ¥282"), "selected SKU re
 assert.equal(quantityTurn3.state.pendingDialog, undefined, "completed quantity dialog should clear pending state");
 passed += 1;
 
+let browseThenSpecificationState = processTeaTurn("500能买两盒吗？").state;
+const browseThenSpecificationTurn2 = processTeaTurn("有哪些", browseThenSpecificationState);
+browseThenSpecificationState = browseThenSpecificationTurn2.state;
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.budget, 500, "candidate browse should preserve pending budget");
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.quantity, 2, "candidate browse should preserve pending quantity");
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.productId, undefined, "candidate browse should not guess a product");
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.specification, undefined, "candidate browse should not set a specification");
+const browseThenSpecificationTurn3 = processTeaTurn("60g的", browseThenSpecificationState);
+browseThenSpecificationState = browseThenSpecificationTurn3.state;
+assert.equal(browseThenSpecificationTurn3.intent, "quantity_price_calc", "specification-only follow-up should continue quantity dialog");
+assert.ok(browseThenSpecificationTurn3.answer.answer.includes("目前 60g 单罐有明前龙井、龙井红茶、桂花龙井和桂花红茶，你想要哪一款？"), "ambiguous 60g specification should ask for a product");
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.specification, "60g", "60g should fill the specification slot");
+assert.equal(browseThenSpecificationState.pendingDialog?.slots.productId, undefined, "ambiguous 60g specification must not guess a product");
+const browseThenSpecificationTurn4 = processTeaTurn("明前龙井", browseThenSpecificationState);
+assert.equal(browseThenSpecificationTurn4.intent, "quantity_price_calc", "product follow-up should complete the quantity dialog");
+assert.ok(browseThenSpecificationTurn4.answer.answer.includes("¥218"), "60g product selection total");
+assert.ok(browseThenSpecificationTurn4.answer.answer.includes("剩余 ¥282"), "60g product selection remainder");
+assert.equal(browseThenSpecificationTurn4.state.pendingDialog, undefined, "completed browse/specification dialog should clear pending state");
+passed += 1;
+
 let directPriceState = processTeaTurn("500能买两盒吗？").state;
 const directPriceTurn = processTeaTurn("298的", directPriceState);
 assert.equal(directPriceTurn.intent, "quantity_price_calc", "price-only follow-up should continue quantity dialog");
@@ -175,4 +195,29 @@ assert.equal(priceCandidatesFollowUp.intent, "product_fit", "which-product follo
 assert.ok(priceCandidatesFollowUp.answer.answer.includes("上一轮对应的候选"), "which-product follow-up should reference the prior candidate set");
 passed += 1;
 
-console.log(`Tea assistant regression: ${passed}/${cases.length + 15} passed`);
+const osmanthusDuo = buildTeaAnswer("双拼桂花礼盒里分别是什么茶？");
+assert.ok(osmanthusDuo.answer.includes("桂花龙井") && osmanthusDuo.answer.includes("桂花红茶"), "osmanthus duo must answer the structured tea composition");
+assert.ok(osmanthusDuo.answer.includes("75g + 75g") && osmanthusDuo.answer.includes("共150g") && osmanthusDuo.answer.includes("¥418"), "osmanthus duo must preserve its confirmed specification and price");
+passed += 1;
+
+const giftNetContent = buildTeaAnswer("一叶春山礼盒的净含量是多少？");
+assert.ok(giftNetContent.answer.includes("明前龙井＋梅枞天红双拼：75g + 75g，共150g"), "gift net content must list confirmed 150g duo details");
+assert.ok(giftNetContent.answer.includes("龙井红茶礼盒：250g") && giftNetContent.answer.includes("桂花红茶礼盒：250g"), "gift net content must retain confirmed 250g sales-page records");
+assert.ok(giftNetContent.answer.includes("60g对应") && giftNetContent.answer.includes("不是礼盒规格"), "60g must not be applied to gift boxes");
+passed += 1;
+
+const longjingBrewing = buildTeaAnswer("龙井应该怎么冲泡？");
+assert.ok(longjingBrewing.answer.includes("90-100℃"), "longjing brewing must use the confirmed KB007 temperature range");
+assert.deepEqual(longjingBrewing.sources.map((source) => source.id), ["KB007"], "longjing brewing must cite only the confirmed brewing record");
+passed += 1;
+
+const giftCatalogTurn = processTeaTurn("一叶春山有哪些礼盒选择？");
+const ordinalStateTurn = processTeaTurn("第二种里面是什么？", giftCatalogTurn.state);
+assert.ok(ordinalStateTurn.answer.answer.includes("桂花龙井") && ordinalStateTurn.answer.answer.includes("桂花红茶"), "ordinal follow-up must resolve the second gift from state");
+const ordinalContextTurn = processTeaTurn("第二种里面是什么？", {}, { priorUserQueries: ["一叶春山有哪些礼盒选择？"], priorAnswers: [giftCatalogTurn.answer] });
+assert.ok(ordinalContextTurn.answer.answer.includes("桂花龙井") && ordinalContextTurn.answer.answer.includes("桂花红茶"), "ordinal follow-up must resolve from request-scoped history");
+const isolatedTurn = processTeaTurn("第二种里面是什么？", {}, { priorUserQueries: [], priorAnswers: [] });
+assert.ok(!isolatedTurn.answer.answer.includes("桂花龙井＋桂花红茶双拼"), "request-scoped history must not leak between users");
+passed += 1;
+
+console.log(`Tea assistant regression: ${passed}/${cases.length + 20} passed`);

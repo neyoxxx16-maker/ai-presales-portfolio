@@ -50,7 +50,8 @@ function withMode(answer: TeaAnswer, mode: TeaResponseMode) { return { ...answer
 
 export async function enhanceWithLiveRag(query: string, turn: TeaTurnResult) {
   const intent = classifyTeaIntent(query).intent;
-  if (!isDeepSeekConfigured() || !ragIntents.has(intent) || turn.state.pendingDialog) return withMode(turn.answer, "structured");
+  const hasStructuredFactAnswer = turn.answer.execution.some((step) => step.detail?.includes("结构化 SKU") || step.detail?.includes("汇总已确认礼盒净含量") || step.detail?.includes("匹配商品："));
+  if (!isDeepSeekConfigured() || !ragIntents.has(intent) || turn.state.pendingDialog || hasStructuredFactAnswer) return withMode(turn.answer, "structured");
   try {
     const index = await loadTeaVectorIndex();
     if (!index) return withMode(turn.answer, "fallback");
