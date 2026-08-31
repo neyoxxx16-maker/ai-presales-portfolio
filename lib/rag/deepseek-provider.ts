@@ -35,12 +35,13 @@ export const deepSeekProvider = {
           { role: "user", content: input },
         ],
         response_format: { type: "json_object" },
+        thinking: { type: "disabled" },
         stream: false,
         max_tokens: 500,
       }),
       signal: AbortSignal.timeout(8000),
     });
-    if (!response.ok) throw new Error("provider_request_failed");
+    if (!response.ok) throw new Error(`provider_request_failed_${response.status}`);
     const data = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
     return parseJsonOutput(data.choices?.[0]?.message?.content);
   },

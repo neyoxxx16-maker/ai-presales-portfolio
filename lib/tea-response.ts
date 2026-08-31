@@ -230,7 +230,7 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   const retrieval = retrieveTeaKnowledge(referenceUnitPrice === undefined ? query : `${query} ¥${referenceUnitPrice}`, intentResult);
   const entities = intentResult.entities;
 
-  if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "医疗功效", "保健", "保健作用", "功效"])) return { answer: "我不能对茶品作医疗、治疗或保健功效承诺，当前资料也没有经过验证的相关依据。你可以继续查看已知的风味、原料、冲泡方式、规格和价格信息；如有健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗与保健功效边界", 1, 0) };
+  if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "降血糖", "血糖", "糖尿病", "医疗功效", "保健", "保健作用", "功效"])) return { answer: "我不能对茶品作医疗、治疗或保健功效承诺，当前资料也没有经过验证的相关依据。你可以继续查看已知的风味、原料、冲泡方式、规格和价格信息；如有健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗与保健功效边界", 1, 0) };
   if (includesAny(normalized, ["其他客户", "别的客户", "别的客人", "客户订单", "客人订单", "订单信息", "购买记录", "手机号", "电话", "联系方式", "地址", "身份信息", "隐私", "修改订单", "取消订单", "真实物流", "支付"])) return { answer: "我不能提供其他客户的订单、手机号、地址、联系方式、身份信息、购买记录或任何客户隐私数据，也不连接真实订单、支付或物流系统。若咨询你自己的订单或售后，请通过人工客服在授权范围内核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "隐私与授权边界", 1, 0) };
   if (includesAny(normalized, ["保质期", "18个月", "24个月"]) && includesAny(normalized, ["龙井红茶", "梅枞天红"])) return { answer: "现有资料中，龙井红茶 / 梅枞天红的保质期存在18个月和24个月两个版本。为避免误导，需要先确认具体 SKU、批次或实物标签；无法确认时应由人工客服协助核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB004", "KB009"), execution: completedExecution("product_question", "识别到保质期版本冲突", 2, 0) };
 

@@ -1,5 +1,5 @@
 import { teaKnowledge } from "@/data/tea/knowledge";
-import { teaPriceEvidence } from "@/data/tea/products";
+import { teaPriceEvidence, teaSkus } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
 import { deepSeekProvider, isDeepSeekConfigured } from "@/lib/rag/deepseek-provider";
 import { embedLocally } from "@/lib/rag/local-embeddings";
@@ -14,7 +14,7 @@ const unique = <T,>(items: T[]) => [...new Set(items)];
 function structuredFacts(answer: TeaAnswer) {
   const skuFacts = (answer.recommendationSkus ?? []).flatMap((sku) => {
     const prices = teaPriceEvidence.filter((price) => sku.priceEvidenceIds?.includes(price.id));
-    return prices.map((price) => `${sku.name}｜${sku.spec}｜${sku.netContent}｜${price.priceType === "new_customer" ? "新客价" : "售价"} ¥${price.amount}${price.originalPrice ? `｜划线价 ¥${price.originalPrice}` : ""}`);
+    return prices.map((price) => `${sku.name}｜${sku.spec}｜${sku.netContent}｜${sku.packaging}｜${price.priceType === "new_customer" ? "新客价" : "售价"} ¥${price.amount}${price.originalPrice ? `｜划线价 ¥${price.originalPrice}` : ""}`);
   });
   return unique([...skuFacts, ...answer.sources.map((source) => `${source.title}：${source.excerpt}`)]);
 }
@@ -27,6 +27,19 @@ function validateGroundedOutput(output: GroundedOutput, request: RagRequest) {
   if (!output || typeof output.answer !== "string" || !["high", "medium", "low"].includes(output.confidence)) return undefined;
   const citations = unique((output.citations ?? []).filter((id) => request.allowedCitationIds.includes(id)));
   if (!citations.length) return undefined;
+  const skuFacts = request.structuredFacts.map((fact) => fact.split("｜")).filter((parts) => parts.length >= 5);
+  const allowed = {
+    products: skuFacts.map(([product]) => product),
+    specifications: unique(skuFacts.flatMap(([, specification, netContent]) => [specification, netContent])),
+    packagings: unique(skuFacts.map(([, , , packaging]) => packaging)),
+    priceTypes: unique(skuFacts.flatMap((parts) => parts.filter((part) => /(?:售价|新客价|划线价)/.test(part)).map((part) => part.replace(/\s*¥.*$/, "")))),
+  };
+  const conflictsWithStructuredFacts = (knownValues: string[], allowedValues: string[]) => allowedValues.length > 0 && knownValues.some((value) => output.answer.includes(value) && !allowedValues.includes(value));
+  if (conflictsWithStructuredFacts(teaSkus.map((sku) => sku.name), allowed.products)) return undefined;
+  const weightTerms = (values: string[]) => unique(values.flatMap((value) => value.match(/\d+(?:\.\d+)?g/gi) ?? []));
+  if (conflictsWithStructuredFacts(weightTerms(teaSkus.flatMap((sku) => [sku.spec, sku.netContent])), weightTerms(allowed.specifications))) return undefined;
+  if (conflictsWithStructuredFacts(unique(teaSkus.map((sku) => sku.packaging)), allowed.packagings)) return undefined;
+  if (conflictsWithStructuredFacts(["售价", "新客价", "划线价"], allowed.priceTypes)) return undefined;
   const allowedPrices = request.structuredFacts.flatMap((fact) => [...fact.matchAll(/¥\s*(\d+(?:\.\d+)?)/g)].map((match) => match[1]));
   const mentionedPrices = [...output.answer.matchAll(/¥\s*(\d+(?:\.\d+)?)/g)].map((match) => match[1]);
   if (mentionedPrices.some((price) => !allowedPrices.includes(price))) return undefined;

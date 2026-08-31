@@ -12,7 +12,7 @@ export async function embedLocally(input: string[]): Promise<number[][]> {
   if (!input.length) return [];
   const scriptPath = path.join(process.cwd(), "scripts", "local-embed.py");
   return new Promise((resolve, reject) => {
-    const processHandle = spawn(localEmbeddingConfig.python, [scriptPath, "--model", localEmbeddingConfig.model], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    const processHandle = spawn(localEmbeddingConfig.python, [scriptPath, "--model", localEmbeddingConfig.model], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let stdout = "";
     let stderr = "";
     processHandle.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
