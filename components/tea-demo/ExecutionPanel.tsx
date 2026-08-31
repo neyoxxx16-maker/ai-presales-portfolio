@@ -9,7 +9,7 @@ export function ExecutionPanel({ steps }: { steps: ExecutionStep[] }) {
         <div><p className="section-kicker">本轮可观察步骤</p><h3 className="mt-2 text-2xl font-medium tracking-[-0.04em]">AI 执行过程</h3></div>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${completed ? "bg-[#c7ff4d] text-black" : "bg-white text-neutral-500"}`}>{completed ? <Check size={13} /> : <Clock3 size={13} />}{completed ? "已完成" : "等待提问"}</span>
       </div>
-      <p className="mt-4 text-xs leading-5 text-neutral-500">展示产品可解释步骤，不展示模型内部推理。当前为 POC 规则识别与 Mock RAG 检索。</p>
+      <p className="mt-4 text-xs leading-5 text-neutral-500">展示产品可解释步骤，不展示模型内部推理。当前为 POC 规则识别与项目资料本地检索。</p>
       <div className="mt-6 space-y-1">
         {steps.length ? steps.map((step, index) => {
           const Icon = step.status === "empty" ? CircleAlert : step.status === "pending" ? Clock3 : Check;

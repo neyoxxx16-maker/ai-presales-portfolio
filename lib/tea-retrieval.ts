@@ -1,96 +1,71 @@
-import { teaKnowledge } from "@/data/tea-knowledge";
-import { teaProducts } from "@/data/tea-products";
-import type { IntentResult, RetrievedKnowledge, RetrievedProduct, RetrievalResult, TeaProduct } from "@/types/tea";
+import { teaKnowledge } from "@/data/tea/knowledge";
+import { teaPriceEvidence, teaProducts, teaSkus } from "@/data/tea/products";
+import type { IntentResult, PriceEvidence, RetrievalResult, TeaProduct, TeaSku } from "@/types/tea";
 
-function includesAny(query: string, values: string[]) {
-  return values.some((value) => query.includes(value.toLowerCase()));
-}
+function hasTerm(query: string, term: string) { return query.includes(term.toLowerCase()); }
+function matchTerms(query: string, terms: string[]) { return terms.filter((term) => hasTerm(query, term)); }
 
-function productScore(product: TeaProduct, query: string, intent: IntentResult) {
+function productMatch(product: TeaProduct, query: string, intent: IntentResult) {
   let score = 0;
   const reasons: string[] = [];
-  const haystack = [product.name, product.category, product.flavor, product.description, ...product.keywords].join(" ").toLowerCase();
-
-  if (query.includes(product.name.toLowerCase())) {
-    score += 12;
-    reasons.push("命中具体商品");
-  }
-  if (includesAny(query, product.keywords)) {
-    score += 4;
-    reasons.push("命中商品关键词");
-  }
-  if (intent.entities.teaType && product.category === intent.entities.teaType) {
-    score += 8;
-    reasons.push(`匹配茶类：${intent.entities.teaType}`);
-  }
-  if (intent.entities.scene === "送礼" && product.scene.some((scene) => scene.includes("赠") || scene.includes("长辈"))) {
-    score += 9;
-    reasons.push("匹配送礼场景");
-  }
-  if (intent.intent === "gift_recommendation" && product.category === "礼盒") {
-    score += 10;
-    reasons.push("礼盒优先匹配送礼需求");
-  }
-  if (intent.entities.audience === "长辈" && [...product.suitableFor, ...product.scene, ...product.keywords].some((item) => item.includes("长辈"))) {
-    score += 7;
-    reasons.push("匹配对象：长辈");
-  }
-  if (intent.entities.preference && (haystack.includes("清香") || haystack.includes("花香"))) {
-    score += 5;
-    reasons.push(`匹配偏好：${intent.entities.preference}`);
-  }
-  if (intent.entities.budget) {
-    if (product.price <= intent.entities.budget) {
-      score += 6;
-      reasons.push(`在 ${intent.entities.budget} 元预算内`);
-    } else {
-      score -= 8;
-    }
-  }
-
+  const exact = [product.name, ...(product.aliases ?? [])].filter((term) => hasTerm(query, term));
+  if (exact.length) { score += 14; reasons.push(`命中茶品：${exact[0]}`); }
+  const matches = matchTerms(query, [...product.flavor, ...product.keywords]);
+  if (matches.length) { score += Math.min(matches.length, 3) * 4; reasons.push(`匹配风味/关键词：${matches.slice(0, 2).join("、")}`); }
+  if (intent.entities.teaType === product.category) { score += 7; reasons.push(`匹配茶类：${product.category}`); }
+  if (intent.entities.scene && product.scene.includes(intent.entities.scene)) { score += 4; reasons.push(`匹配场景：${intent.entities.scene}`); }
   return { score, reasons };
 }
 
-/**
- * 当前为可替换的 Mock Retrieval 边界：规则评分模拟召回与排序。
- * 后续可在此函数内替换为 embedding + vector search，保留相同返回结构。
- */
+function skuMatch(sku: TeaSku, query: string) {
+  let score = 0;
+  const reasons: string[] = [];
+  if (hasTerm(query, sku.name.toLowerCase())) { score += 16; reasons.push("命中具体商品组合"); }
+  const combinationParts = sku.name.split(/[＋+]/).map((part) => part.replace("双拼", "").trim()).filter(Boolean);
+  if (combinationParts.length > 1 && combinationParts.every((part) => hasTerm(query, part))) {
+    score += 16;
+    reasons.push("命中双拼茶品组合");
+  }
+  const matches = matchTerms(query, [sku.spec, sku.netContent, sku.packaging]);
+  if (matches.length) { score += matches.length * 4; reasons.push(`匹配规格/包装：${matches.join("、")}`); }
+  if (sku.priceRelationGroup && (hasTerm(query, "双拼") || hasTerm(query, "双盒") || hasTerm(query, "四款"))) { score += 7; reasons.push("命中四款同价关系"); }
+  return { score, reasons };
+}
+
+function priceMatch(price: PriceEvidence, query: string) {
+  let score = 0;
+  const reasons: string[] = [];
+  if (hasTerm(query, price.productName)) { score += 10; reasons.push(`命中茶品：${price.productName}`); }
+  if (hasTerm(query, price.netContent)) { score += 10; reasons.push(`命中净含量：${price.netContent}`); }
+  if (hasTerm(query, price.packaging)) { score += 3; reasons.push(`匹配包装：${price.packaging}`); }
+  if (hasTerm(query, "价格") || hasTerm(query, "多少钱")) score += 2;
+  return { score, reasons };
+}
+
+/** 当前为本地规则检索；默认只读取 data/tea 中有 V1.1 资料来源支持的数据。 */
 export function retrieveTeaKnowledge(query: string, intent: IntentResult): RetrievalResult {
   const normalized = query.toLowerCase();
-  const products: RetrievedProduct[] = teaProducts
-    .map((product) => {
-      const { score, reasons } = productScore(product, normalized, intent);
-      return { ...product, score, matchReasons: reasons };
-    })
-    .filter((product) => product.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
-
-  const knowledge: RetrievedKnowledge[] = teaKnowledge
-    .map((document) => {
-      let score = 0;
-      const reasons: string[] = [];
-      if (includesAny(normalized, document.keywords.map((keyword) => keyword.toLowerCase()))) {
-        score += 6;
-        reasons.push("命中知识关键词");
-      }
-      if (intent.intent === "brewing_question" && document.type === "冲泡指南") {
-        score += 8;
-        reasons.push("匹配冲泡场景");
-      }
-      if (intent.intent === "gift_recommendation" && document.type === "选购指南") {
-        score += 8;
-        reasons.push("匹配礼赠场景");
-      }
-      if (document.productId && products.some((product) => product.id === document.productId)) {
-        score += 4;
-        reasons.push("关联候选商品");
-      }
-      return { ...document, score, matchReasons: reasons };
-    })
-    .filter((document) => document.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
-
-  return { products, knowledge };
+  const products = teaProducts.map((product) => {
+    const { score, reasons } = productMatch(product, normalized, intent);
+    return { ...product, relatedSkus: teaSkus.filter((sku) => sku.productIds.includes(product.id)), score, matchReasons: reasons };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 4);
+  const skus = teaSkus.map((sku) => {
+    const { score, reasons } = skuMatch(sku, normalized);
+    return { ...sku, score, matchReasons: reasons };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+  const prices = teaPriceEvidence.map((price) => {
+    const { score, reasons } = priceMatch(price, normalized);
+    return { ...price, score, matchReasons: reasons };
+  }).filter((item) => item.score >= 12).sort((a, b) => b.score - a.score).slice(0, 3);
+  const knowledge = teaKnowledge.map((document) => {
+    let score = 0;
+    const reasons: string[] = [];
+    const matches = matchTerms(normalized, document.keywords);
+    if (matches.length) { score += Math.min(matches.length, 3) * 4; reasons.push(`命中知识关键词：${matches.slice(0, 2).join("、")}`); }
+    if (intent.intent === "brewing_question" && document.knowledgeType === "brewing") { score += 12; reasons.push("匹配冲泡场景"); }
+    if (intent.intent === "gift_recommendation" && document.knowledgeType === "recommendation") { score += 8; reasons.push("匹配推荐场景"); }
+    if (document.knowledgeType === "sku" && skus.length) { score += 4; reasons.push("关联SKU资料"); }
+    return { ...document, score, matchReasons: reasons };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 4);
+  return { products, skus, prices, knowledge };
 }

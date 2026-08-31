@@ -1,0 +1,26 @@
+import type { PriceEvidence, TeaProduct, TeaSku } from "@/types/tea";
+
+export const teaProducts: TeaProduct[] = [
+  { id: "mingqian-longjing", name: "明前龙井", category: "绿茶", flavor: ["栗香", "兰花香", "鲜爽", "回甘"], description: "干茶扁平挺直、绿中带黄；栗香浓郁，尾调带兰花香，入口鲜爽回甘。具体商品产区须以当前参数页或实物标签为准。", suitableFor: ["偏好鲜爽口感的人", "喜欢栗香与兰花香的人"], scene: ["自饮", "试饮", "送礼"], keywords: ["明前龙井", "龙井", "绿茶", "栗香", "兰花香", "鲜爽", "回甘"], skuIds: ["mingqian-longjing-sample", "longjing-black-tea-duo"], sourceIds: ["S01", "S02"], dataSource: "verified-project-source" },
+  { id: "osmanthus-longjing", name: "桂花龙井", category: "调味绿茶", flavor: ["桂花甜香", "龙井兰香", "鲜爽", "顺滑温润"], description: "桂花甜香与龙井兰香交融，入口鲜爽、顺滑温润；资料中的“头采”表述仅可在保留来源时引用。", suitableFor: ["偏好桂花甜香的人", "喜欢鲜爽与顺滑口感的人"], scene: ["自饮", "送礼"], keywords: ["桂花龙井", "桂花", "龙井", "调味绿茶", "鲜爽", "花香"], skuIds: ["osmanthus-duo-gift", "osmanthus-longjing-double-box"], sourceIds: ["S01", "S02"], dataSource: "verified-project-source" },
+  { id: "longjing-black-tea", name: "龙井红茶", aliases: ["梅枞天红"], category: "红茶", flavor: ["蜜香", "蜜甜", "醇厚", "回甘较快"], description: "干茶乌润紧细，蜜香浓郁，入口蜜甜醇厚、回甘较快。“梅枞天红”是龙井红茶的品牌/商品别名。", suitableFor: ["偏好蜜香与醇厚口感的人"], scene: ["自饮", "送礼"], keywords: ["龙井红茶", "梅枞天红", "红茶", "蜜香", "蜜甜", "醇厚"], skuIds: ["longjing-black-tea-duo"], sourceIds: ["S01", "S04"], dataSource: "verified-project-source" },
+  { id: "osmanthus-black-tea", name: "桂花红茶", category: "调味红茶", flavor: ["桂花鲜灵清甜", "红茶暖香", "顺滑", "回甘清甜"], description: "桂花鲜灵清甜与红茶暖香交融，入口顺滑、回甘清甜；已知配料为茶鲜叶和桂花。", ingredients: ["茶鲜叶", "桂花"], suitableFor: ["偏好桂花甜香与红茶暖香的人"], scene: ["自饮", "送礼"], keywords: ["桂花红茶", "桂花", "红茶", "暖香", "顺滑", "回甘"], skuIds: ["osmanthus-duo-gift", "osmanthus-black-tea-double-box"], sourceIds: ["S01", "S04"], dataSource: "verified-project-source" },
+];
+
+export const teaSkus: TeaSku[] = [
+  { id: "mingqian-longjing-sample", name: "明前龙井试饮装", productIds: ["mingqian-longjing"], spec: "3g × 2袋", netContent: "共6g", packaging: "试饮装", priceStatus: "unverified", sourceIds: ["S02"], dataSource: "verified-project-source" },
+  { id: "longjing-black-tea-duo", name: "明前龙井＋梅枞天红双拼", productIds: ["mingqian-longjing", "longjing-black-tea"], spec: "75g + 75g", netContent: "共150g", packaging: "礼盒", priceStatus: "unverified", priceRelationGroup: "gift-box-same-price-2-to-5", sourceIds: ["S05"], dataSource: "verified-project-source" },
+  { id: "osmanthus-duo-gift", name: "桂花龙井＋桂花红茶双拼", productIds: ["osmanthus-longjing", "osmanthus-black-tea"], spec: "75g + 75g", netContent: "共150g", packaging: "礼盒", priceStatus: "unverified", priceRelationGroup: "gift-box-same-price-2-to-5", sourceIds: ["S05"], dataSource: "verified-project-source" },
+  { id: "osmanthus-black-tea-double-box", name: "桂花红茶双盒", productIds: ["osmanthus-black-tea"], spec: "75g × 2", netContent: "共150g", packaging: "礼盒", priceStatus: "unverified", priceRelationGroup: "gift-box-same-price-2-to-5", sourceIds: ["S05"], dataSource: "verified-project-source" },
+  { id: "osmanthus-longjing-double-box", name: "桂花龙井双盒", productIds: ["osmanthus-longjing"], spec: "75g × 2", netContent: "共150g", packaging: "礼盒", priceStatus: "unverified", priceRelationGroup: "gift-box-same-price-2-to-5", sourceIds: ["S05"], dataSource: "verified-project-source" },
+  { id: "gift-box-unresolved", name: "礼盒装（需确认茶品与净含量）", productIds: [], spec: "存在250g红茶礼盒等不同规格", netContent: "待确认具体商品", packaging: "礼盒", priceStatus: "unverified", sourceIds: ["S03", "S05"], dataSource: "verified-project-source" },
+  { id: "single-pack-unresolved", name: "单盒 / 单罐装（需确认茶品与净含量）", productIds: [], spec: "存在独立单罐 SKU", netContent: "待确认具体商品", packaging: "单盒 / 单罐装", priceStatus: "unverified", sourceIds: ["S03", "S05"], dataSource: "verified-project-source" },
+];
+
+// 价格证据只绑定截图中的对应 SKU，绝不作为其他礼盒或品牌统一售价。
+export const teaPriceEvidence: PriceEvidence[] = [
+  { id: "price-longjing-black-tea-60g", skuName: "龙井红茶单罐", productName: "龙井红茶", netContent: "60g", packaging: "单罐", amount: 109, currency: "CNY", priceType: "new_customer", originalPrice: 119, status: "verified_snapshot", sourceId: "S03", saleChannel: "微信小店商品截图", note: "截图新客价；页面曾显示48小时内发货。价格与促销可能变化，以当前页面为准。", dataSource: "verified-project-source" },
+  { id: "price-osmanthus-black-tea-60g", skuName: "桂花红茶单罐", productName: "桂花红茶", netContent: "60g", packaging: "单罐", amount: 109, currency: "CNY", priceType: "new_customer", originalPrice: 119, status: "verified_snapshot", sourceId: "S03", saleChannel: "微信小店商品截图", note: "截图新客价；页面曾显示48小时内发货。价格与促销可能变化，以当前页面为准。", dataSource: "verified-project-source" },
+  { id: "price-longjing-black-tea-gift-250g", skuName: "龙井红茶礼盒", productName: "龙井红茶", netContent: "250g", packaging: "礼盒", amount: 288, currency: "CNY", priceType: "new_customer", originalPrice: 298, status: "verified_snapshot", sourceId: "S03", saleChannel: "微信小店商品截图", note: "截图新客价，仅对应250g礼盒，不代表四款150g双拼/双盒礼盒的价格。价格与促销可能变化，以当前页面为准。", dataSource: "verified-project-source" },
+  { id: "price-osmanthus-black-tea-gift-250g", skuName: "桂花红茶礼盒", productName: "桂花红茶", netContent: "250g", packaging: "礼盒", amount: 408, currency: "CNY", priceType: "new_customer", originalPrice: 418, status: "verified_snapshot", sourceId: "S03", saleChannel: "微信小店商品截图", note: "截图新客价，仅对应250g礼盒，不代表四款150g双拼/双盒礼盒的价格。价格与促销可能变化，以当前页面为准。", dataSource: "verified-project-source" },
+];

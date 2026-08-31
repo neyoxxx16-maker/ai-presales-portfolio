@@ -8,7 +8,7 @@ export function SourceList({ sources }: { sources: RetrievedKnowledge[] }) {
       <div className="mt-3 space-y-2">
         {sources.map((source, index) => (
           <details key={source.id} className="group rounded-xl border border-black/5 bg-white px-4 py-3">
-            <summary className="cursor-pointer list-none text-sm text-neutral-700"><span className="mr-2 font-medium text-black">[{index + 1}]</span>{source.title}<span className="ml-2 text-xs text-neutral-400">{source.type}</span></summary>
+            <summary className="cursor-pointer list-none text-sm text-neutral-700"><span className="mr-2 font-medium text-black">[{index + 1}]</span>{source.title}<span className="ml-2 text-xs text-neutral-400">{source.type} · {source.sourceIds.join(" / ")}</span></summary>
             <p className="pt-3 text-sm leading-6 text-neutral-500">{source.excerpt}</p>
           </details>
         ))}

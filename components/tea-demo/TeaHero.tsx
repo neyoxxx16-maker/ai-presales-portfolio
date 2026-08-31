@@ -10,7 +10,7 @@ export function TeaHero() {
           <div className="flex h-full flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-medium tracking-[0.14em] text-white/85">
               <span>PROJECT 01 · AI 茶饮知识服务</span>
-              <span>当前版本 · Mock RAG Demo</span>
+              <span>当前版本 · 项目资料 POC</span>
             </div>
             <div className="mt-auto pt-20 lg:pt-28">
               <p className="text-sm font-medium text-white/80">一叶春山</p>
@@ -28,7 +28,7 @@ export function TeaHero() {
           <div className="glass-card rounded-[26px] p-6 text-black sm:p-7">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#c7ff4d]"><SearchCheck size={19} /></span>
             <h2 className="mt-12 text-2xl font-medium tracking-[-0.04em]">不是普通聊天框，<br />而是可解释的知识服务 POC。</h2>
-            <p className="mt-4 text-sm leading-7 text-neutral-600">本页用本地商品资料、规则意图识别和 Mock 检索，演示可追溯问答与结构化推荐体验。</p>
+            <p className="mt-4 text-sm leading-7 text-neutral-600">本页用项目资料整理的知识库与本地规则检索，演示可追溯问答与结构化推荐体验。</p>
             <div className="mt-6 flex items-center gap-2 text-xs text-neutral-500"><Database size={14} /> 部分商品资料仅用于 POC 演示</div>
           </div>
         </div>

@@ -37,10 +37,10 @@ export function TeaChat() {
 
   return (
     <section id="online-demo" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-24 lg:px-8 lg:py-32">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><p className="section-kicker">在线 AI 导购 Demo</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">用一个真实问题，体验这条 POC 链路。</h2></div><p className="max-w-md text-sm leading-7 text-neutral-500">本页不调用真实大模型。每次回答均由本地规则识别与 Mock Retrieval 生成，并展示命中来源。</p></div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><p className="section-kicker">在线 AI 导购 Demo</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">用一个真实问题，体验这条 POC 链路。</h2></div><p className="max-w-md text-sm leading-7 text-neutral-500">本页不调用真实大模型。每次回答均由项目资料知识库与本地规则检索生成，并展示命中来源。</p></div>
       <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(330px,0.6fr)] lg:items-start">
         <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-soft">
-          <div className="flex items-center justify-between border-b border-black/5 bg-[#f7f8f9] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"><Bot size={16} /></span><div><p className="text-sm font-medium">一叶春山 · 知识库导购</p><p className="mt-0.5 text-xs text-neutral-500">当前版本 · Mock RAG Demo</p></div></div><span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] text-neutral-500">POC 规则识别</span></div>
+          <div className="flex items-center justify-between border-b border-black/5 bg-[#f7f8f9] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"><Bot size={16} /></span><div><p className="text-sm font-medium">一叶春山 · 知识库导购</p><p className="mt-0.5 text-xs text-neutral-500">当前版本 · 项目资料 POC</p></div></div><span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] text-neutral-500">POC 规则识别</span></div>
           <div className="min-h-[440px] space-y-6 p-5 sm:p-6">
             {messages.map((message) => message.role === "user" ? (
               <div key={message.id} className="ml-auto max-w-[88%] rounded-[20px] rounded-tr-sm bg-black px-4 py-3 text-sm leading-6 text-white">{message.content}</div>
@@ -55,7 +55,7 @@ export function TeaChat() {
         </div>
         <ExecutionPanel steps={steps} />
       </div>
-      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-black/5 bg-[#f7f8f9] p-4 text-sm leading-6 text-neutral-600"><Sparkles className="mt-0.5 shrink-0" size={16} /><p>演示说明：商品与知识资料为 POC 合理示例，正式项目需接入企业真实产品资料；当前检索与需求识别为本地确定性规则，不代表真实向量检索或生产 AI 能力。</p></div>
+      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-black/5 bg-[#f7f8f9] p-4 text-sm leading-6 text-neutral-600"><Sparkles className="mt-0.5 shrink-0" size={16} /><p>演示说明：茶品、SKU、价格证据与来源依据项目资料整理；当前仍是个人作品集 POC，检索与需求识别为本地确定性规则，不代表企业生产系统或真实向量检索能力。</p></div>
     </section>
   );
 }

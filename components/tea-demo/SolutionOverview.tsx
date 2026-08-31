@@ -2,7 +2,7 @@ import { ArrowDown, BookOpenCheck, ClipboardList, Sparkles } from "lucide-react"
 
 const steps = [
   ["01", "需求识别", "提取预算、对象、场景、偏好和茶类。", ClipboardList],
-  ["02", "Mock RAG 检索", "在本地商品与知识资料中进行关键词、场景和预算匹配。", BookOpenCheck],
+  ["02", "本地知识检索", "在项目资料整理的茶品、SKU、价格证据与知识条目中进行匹配。", BookOpenCheck],
   ["03", "可追溯回答", "输出推荐理由，并展示本轮实际命中的资料来源。", Sparkles],
 ] as const;
 
