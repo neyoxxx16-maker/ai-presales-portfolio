@@ -28,14 +28,20 @@ function skuMatch(sku: TeaSku, query: string) {
   }
   const matches = matchTerms(query, [sku.spec, sku.netContent, sku.packaging]);
   if (matches.length) { score += matches.length * 4; reasons.push(`匹配规格/包装：${matches.join("、")}`); }
-  if (sku.priceRelationGroup && (hasTerm(query, "双拼") || hasTerm(query, "双盒") || hasTerm(query, "四款"))) { score += 7; reasons.push("命中四款同价关系"); }
+  if (sku.priceRelationGroup && (hasTerm(query, "双拼") || hasTerm(query, "双盒") || hasTerm(query, "单罐"))) { score += 7; reasons.push("命中已确认商品价格关系"); }
   return { score, reasons };
 }
 
 function priceMatch(price: PriceEvidence, query: string) {
   let score = 0;
   const reasons: string[] = [];
+  if (hasTerm(query, price.skuName)) { score += 16; reasons.push(`命中具体SKU：${price.skuName}`); }
   if (hasTerm(query, price.productName)) { score += 10; reasons.push(`命中茶品：${price.productName}`); }
+  const exactCombination = price.combinationTerms?.every((term) => hasTerm(query, term));
+  const aliasedCombination = price.combinationTermGroups?.every((group) => group.some((term) => hasTerm(query, term)));
+  if (exactCombination || aliasedCombination) { score += 16; reasons.push("命中商品组合"); }
+  const keywordMatches = matchTerms(query, price.keywords ?? []);
+  if (keywordMatches.length) { score += Math.min(keywordMatches.length, 3) * 5; reasons.push(`匹配价格关键词：${keywordMatches.slice(0, 2).join("、")}`); }
   if (hasTerm(query, price.netContent)) { score += 10; reasons.push(`命中净含量：${price.netContent}`); }
   if (hasTerm(query, price.packaging)) { score += 3; reasons.push(`匹配包装：${price.packaging}`); }
   if (hasTerm(query, "价格") || hasTerm(query, "多少钱")) score += 2;

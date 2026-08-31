@@ -1,4 +1,5 @@
 import { teaKnowledge } from "@/data/tea/knowledge";
+import { teaPriceEvidence } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
 import { retrieveTeaKnowledge } from "@/lib/tea-retrieval";
 import type { TeaAnswer, TeaEntities } from "@/types/tea";
@@ -24,6 +25,16 @@ function completedExecution(intent: keyof typeof intentLabels, detail: string, k
   ];
 }
 
+function priceAnswer(price: typeof teaPriceEvidence[number]) {
+  const specText = price.spec ? `${price.spec}，` : "";
+  const originalPriceText = price.originalPrice ? `，划线价为 ¥${price.originalPrice}` : "";
+  const shippingText = price.shippingIncluded ? "，包邮" : "";
+  if (price.priceType === "user_confirmed_business_rule") {
+    return `根据用户本人确认的业务口径，${price.skuName}（${specText}${price.netContent}）当前售价为 ¥${price.amount}${originalPriceText}${shippingText}。该价格只对应此商品、组合与规格。`;
+  }
+  return `${price.skuName}（${specText}${price.netContent}）在对应微信小店截图中的新客价为 ¥${price.amount}${originalPriceText}。该证据只适用于此商品与规格；价格和促销可能变化，请以当前销售页面为准。`;
+}
+
 export function buildTeaAnswer(query: string): TeaAnswer {
   const normalized = query.toLowerCase();
   const intentResult = classifyTeaIntent(query);
@@ -38,12 +49,16 @@ export function buildTeaAnswer(query: string): TeaAnswer {
   }
 
   const asksPrice = includesAny(normalized, ["多少钱", "价格", "价钱"]);
-  if (asksPrice && includesAny(normalized, ["四款", "双拼", "双盒"])) {
-    return { answer: "当前项目资料只确认四款150g双拼/双盒礼盒价格一致；具体当期金额缺少可核验销售页面，不能套用其他60g或250g SKU 的截图价格。请以当前销售页面或人工确认结果为准。", recommendations: [], sources: sourceById("KB006"), execution: completedExecution("product_question", "价格关系：四款同价，金额待核验", 1, 4) };
-  }
   if (asksPrice && retrieval.prices.length) {
     const price = retrieval.prices[0];
-    return { answer: `${price.skuName}（${price.netContent}）在对应微信小店截图中的新客价为 ¥${price.amount}，划线价为 ¥${price.originalPrice}。该证据只适用于此商品与规格；价格和促销可能变化，请以当前销售页面为准。`, recommendations: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `命中价格证据：${price.skuName} ${price.netContent}`, 1, 1) };
+    const secondPrice = retrieval.prices[1];
+    if (secondPrice && secondPrice.score === price.score) {
+      return { answer: "当前问题未指定足够的商品范围。请补充具体茶品、组合、净含量或包装（例如60g单罐、150g双拼或250g礼盒），我不会把不同规格的价格互相套用。", recommendations: [], sources: sourceById("KB006", "KB011"), execution: completedExecution("product_question", "价格查询范围不足", 2, 0) };
+    }
+    return { answer: priceAnswer(price), recommendations: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `命中价格证据：${price.skuName} ${price.netContent}`, 1, 1) };
+  }
+  if (asksPrice && includesAny(normalized, ["礼盒", "双拼", "双盒"])) {
+    return { answer: "请先确认具体礼盒的茶品、组合与规格（例如150g双拼或250g礼盒）。不同商品、组合、净含量与包装的价格不能互相套用，因此我不会直接返回¥298或¥418。", recommendations: [], sources: sourceById("KB006", "KB011"), execution: completedExecution("product_question", "礼盒价格查询范围不足", 2, 0) };
   }
   if (asksPrice) {
     return { answer: "当前资料没有该具体商品、规格和销售页面对应的可核验当期价格。我不会用其他 SKU 的截图价代替，建议以当前销售页面或人工客服确认。", recommendations: [], sources: sourceById("KB006", "KB009"), execution: completedExecution("product_question", "价格待核验", 2, 0) };
@@ -69,8 +84,9 @@ export function buildTeaAnswer(query: string): TeaAnswer {
 
   const exactSku = retrieval.skus.find((sku) => sku.score >= 16);
   if (exactSku) {
-    const priceText = exactSku.priceStatus === "unverified" ? "当前价格：待当前销售页面或人工核验。" : "当前价格：请查看对应价格证据。";
-    return { answer: `${exactSku.name}：规格为 ${exactSku.spec}，${exactSku.netContent}，包装类型为${exactSku.packaging}。${priceText}${exactSku.priceRelationGroup ? "该商品属于四款同价礼盒关系，但资料未确认具体金额。" : ""}`, recommendations: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `匹配SKU：${exactSku.name}`, 1, 1) };
+    const price = teaPriceEvidence.find((item) => exactSku.priceEvidenceIds?.includes(item.id));
+    const priceText = price ? ` ${priceAnswer(price)}` : " 当前价格：待当前销售页面或人工核验。";
+    return { answer: `${exactSku.name}：规格为 ${exactSku.spec}，${exactSku.netContent}，包装类型为${exactSku.packaging}。${priceText}`, recommendations: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `匹配SKU：${exactSku.name}`, 1, 1) };
   }
 
   if (intentResult.intent === "product_recommendation" || intentResult.intent === "gift_recommendation") {

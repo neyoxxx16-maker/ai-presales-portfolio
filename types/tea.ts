@@ -1,6 +1,6 @@
 export type TeaCategory = "绿茶" | "调味绿茶" | "红茶" | "调味红茶";
 export type DataSource = "verified-project-source" | "mock";
-export type PriceStatus = "verified_snapshot" | "unverified";
+export type PriceStatus = "verified_snapshot" | "user_confirmed" | "unverified";
 
 export type TeaProduct = {
   id: string;
@@ -37,15 +37,20 @@ export type PriceEvidence = {
   id: string;
   skuName: string;
   productName: string;
+  spec?: string;
   netContent: string;
-  packaging: "单罐" | "礼盒";
+  packaging: "试饮装" | "单罐" | "礼盒";
   amount: number;
   currency: "CNY";
-  priceType: "new_customer";
+  priceType: "new_customer" | "user_confirmed_business_rule";
   originalPrice?: number;
-  status: "verified_snapshot";
+  shippingIncluded?: boolean;
+  keywords?: string[];
+  combinationTerms?: string[];
+  combinationTermGroups?: string[][];
+  status: "verified_snapshot" | "user_confirmed";
   sourceId: string;
-  saleChannel: "微信小店商品截图";
+  saleChannel: "微信小店商品截图" | "用户补充业务口径";
   note: string;
   dataSource: "verified-project-source";
 };
