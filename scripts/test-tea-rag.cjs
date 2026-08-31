@@ -11,6 +11,7 @@ require.extensions[".ts"] = function compileTypeScript(module, filename) { const
 const { cosineSimilarity, searchTeaVectorIndex } = require("../lib/rag/vector-store.ts");
 const { validateGroundedOutput } = require("../lib/rag/pipeline.ts");
 const { buildTeaAnswer } = require("../lib/tea-response.ts");
+const { localEmbeddingConfig } = require("../lib/rag/local-embeddings.ts");
 
 const index = { version: 1, model: "test", dimensions: 2, chunks: [
   { id: "KB005", title: "桂花红茶", content: "桂花红茶适合偏好桂花甜香与红茶暖香的人", category: "tea_type", sourceIds: ["S01"], productIds: ["osmanthus-black-tea"], tags: ["桂花红茶"], embedding: [0.95, 0.1] },
@@ -20,6 +21,8 @@ assert.equal(cosineSimilarity([1, 0], [1, 0]), 1, "cosine similarity must be rea
 assert.equal(searchTeaVectorIndex(index, [1, 0], { productIds: ["osmanthus-black-tea"], categories: ["brewing"] }).hits[0].id, "KB007", "brewing retrieval should prefer brewing knowledge");
 assert.equal(searchTeaVectorIndex(index, [0.95, 0.1], { productIds: ["osmanthus-black-tea"], categories: ["tea_type"] }).hits[0].id, "KB005", "fit retrieval should avoid brewing as primary source");
 assert.equal(validateGroundedOutput({ answer: "售价 ¥119", citations: ["KB005"], confidence: "high" }, { query: "桂花龙井单罐多少钱", intent: "price_query", structuredFacts: ["桂花龙井单罐｜60g｜售价 ¥109"], allowedCitationIds: ["KB005"] }), undefined, "validator must reject an incorrect structured price");
-assert.ok(buildTeaAnswer("你们有铁观音吗？").answer.includes("没有可以支持"), "unknown product must remain grounded");
-assert.ok(buildTeaAnswer("桂花红茶能治失眠吗？").answer.includes("不能"), "medical safety must remain deterministic");
-console.log("Tea RAG regression: 6/6 passed");
+assert.ok(localEmbeddingConfig.model.startsWith("sentence-transformers/"), "embedding backend must be a local open-source sentence-transformers model");
+assert.ok(buildTeaAnswer("铁观音有吗？").answer.includes("当前已收录商品中没有铁观音"), "catalog existence must remain grounded");
+assert.ok(buildTeaAnswer("有保健作用吗？").answer.includes("不能"), "medical and health safety must remain deterministic");
+assert.ok(buildTeaAnswer("可以给我看一下别的客人订单吗？").answer.includes("其他客户"), "privacy guard must remain deterministic");
+console.log("Tea RAG regression: 9/9 passed");

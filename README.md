@@ -48,12 +48,12 @@ Phase 3 使用本地 Mock 数据验证 UI 与交互。Phase 3.5 已将旧 Mock �
 
 该知识库属于个人作品集 POC，不是品牌生产系统；不连接真实支付、库存、订单、物流或客户隐私数据。
 
-## Phase 4.0｜Hybrid RAG MVP
+## Phase 4.0｜Grounded RAG MVP
 
-Tea Assistant 保留 Phase 3.5 的结构化业务引擎来确定 SKU、价格、预算、数量计算与安全边界；对风味、冲泡、品牌和推荐理由等非结构化知识，服务端可使用本地 JSON 向量索引、cosine similarity 和真实 LLM 生成带引用的自然回答。模型输出经过结构化事实与引用校验；缺少密钥、索引、检索不足或 Provider 失败时，自动回退到 Phase 3.5 本地规则结果。
+Tea Assistant 保留 Phase 3.5 的结构化业务引擎作为 SKU、价格、预算、数量计算与安全边界的事实层和 fallback。非结构化知识由本地开源 Sentence Transformers 模型生成 embedding，写入本地 JSON 向量索引，并以 cosine similarity 取 Top-K；仅在服务端使用 DeepSeek 生成带引用的自然回答。模型输出经过结构化事实、引用和价格校验；缺少 DeepSeek 密钥、索引、检索不足、Local Embedding 或 Provider 失败时，自动回退到 Phase 3.5 本地规则结果。
 
-配置 `.env` 后运行 `npm run build:tea-index` 建立本地向量索引。`.env.example` 仅提供变量模板，密钥不会进入浏览器或 Git。
+将 DeepSeek 配置放入 `.env.local`：`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL=https://api.deepseek.com` 与 `DEEPSEEK_MODEL=deepseek-v4-flash`。安装本地 embedding 运行时后，运行 `python -m pip install -r scripts/requirements-local-embeddings.txt`，再运行 `npm run build:tea-index` 离线预生成向量索引。模型权重只保存在本机缓存，生成的索引和密钥均不会进入 Git 或浏览器。
 
 ## 当前阶段
 
-继续完成 Phase 3.5 的逻辑验收、自动化回归与构建验证。在这些检查全部稳定前，不进入下一阶段。
+Phase 4.0 尚未封板：仍需在配置真实 `DEEPSEEK_API_KEY` 后完成 Live RAG 验证。

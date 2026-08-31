@@ -5,13 +5,20 @@ import { retrieveTeaKnowledge } from "@/lib/tea-retrieval";
 import type { PriceEvidence, RetrievedKnowledge, RetrievedProduct, RetrievedSku, TeaAnswer, TeaConversationContext, TeaEntities, TeaIntent, TeaProduct, TeaSku } from "@/types/tea";
 
 const intentLabels: Record<TeaIntent, string> = {
-  product_recommendation: "个性化推荐", product_question: "产品问答", product_fit: "口味适配", product_compare: "茶品对比", gift_catalog: "礼盒浏览", product_browse: "商品浏览", price_query: "价格查询", price_reverse_lookup: "价格反查", price_compare: "价格对比", price_extreme: "价格排序", quantity_price_calc: "数量与预算计算", brewing_question: "冲泡问答", brand_question: "品牌与产区问答", aftersales: "售后问答", unknown: "边界或未支持问题",
+  product_recommendation: "个性化推荐", product_question: "产品问答", product_fit: "口味适配", product_compare: "茶品对比", gift_catalog: "礼盒浏览", product_browse: "商品浏览", product_existence: "商品收录查询", price_query: "价格查询", price_reverse_lookup: "价格反查", price_compare: "价格对比", price_extreme: "价格排序", quantity_price_calc: "数量与预算计算", brewing_question: "冲泡问答", brand_question: "品牌与产区问答", aftersales: "售后问答", unknown: "边界或未支持问题",
 };
 
 const productKnowledgeIds: Record<string, string> = { "mingqian-longjing": "KB002", "osmanthus-longjing": "KB003", "longjing-black-tea": "KB004", "osmanthus-black-tea": "KB005" };
 const includesAny = (query: string, terms: string[]) => terms.some((term) => query.includes(term));
 const unique = <T,>(items: T[]) => [...new Set(items)];
 const uniqueById = <T extends { id: string },>(items: T[]) => Array.from(new Map(items.map((item) => [item.id, item])).values());
+
+function requestedCatalogTerm(query: string) {
+  const normalized = query.trim().replace(/[？?。！!]+$/, "");
+  const direct = normalized.match(/^(?:你们|这里|店里)?\s*(.+?)(?:有吗|有没有|有没)$/);
+  const inverted = normalized.match(/^(?:你们|这里|店里)?\s*有\s*(.+?)吗$/);
+  return (direct?.[1] ?? inverted?.[1])?.trim();
+}
 
 function entitySummary(entities: TeaEntities) {
   return [entities.budget !== undefined && `预算：¥${entities.budget}`, entities.scene && `场景：${entities.scene}`, entities.audience && `对象：${entities.audience}`, entities.preference && `偏好：${entities.preference}`, entities.requiredTeaTypes?.length && `限定茶类：${entities.requiredTeaTypes.join("/")}`, entities.packaging && `规格需求：${entities.packaging}`].filter(Boolean).join(" · ") || "未提取到明确偏好";
@@ -223,8 +230,8 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   const retrieval = retrieveTeaKnowledge(referenceUnitPrice === undefined ? query : `${query} ¥${referenceUnitPrice}`, intentResult);
   const entities = intentResult.entities;
 
-  if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "医疗功效"])) return { answer: "我不能对茶品作治疗疾病、改善失眠或减肥等医疗功效承诺。当前资料也没有支持这类结论的依据；如涉及健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗功效边界", 1, 0) };
-  if (includesAny(normalized, ["其他客户", "客户订单", "订单信息", "手机号", "电话", "地址", "隐私", "修改订单", "取消订单", "真实物流", "支付"])) return { answer: "我不能查询、披露或修改其他客户的订单、电话、地址等隐私信息，也不连接真实订单、支付或物流系统。涉及个人订单或售后办理，请由人工客服在授权范围内处理。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "隐私与真实系统边界", 1, 0) };
+  if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "医疗功效", "保健", "保健作用", "功效"])) return { answer: "我不能对茶品作医疗、治疗或保健功效承诺，当前资料也没有经过验证的相关依据。你可以继续查看已知的风味、原料、冲泡方式、规格和价格信息；如有健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗与保健功效边界", 1, 0) };
+  if (includesAny(normalized, ["其他客户", "别的客户", "别的客人", "客户订单", "客人订单", "订单信息", "购买记录", "手机号", "电话", "联系方式", "地址", "身份信息", "隐私", "修改订单", "取消订单", "真实物流", "支付"])) return { answer: "我不能提供其他客户的订单、手机号、地址、联系方式、身份信息、购买记录或任何客户隐私数据，也不连接真实订单、支付或物流系统。若咨询你自己的订单或售后，请通过人工客服在授权范围内核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "隐私与授权边界", 1, 0) };
   if (includesAny(normalized, ["保质期", "18个月", "24个月"]) && includesAny(normalized, ["龙井红茶", "梅枞天红"])) return { answer: "现有资料中，龙井红茶 / 梅枞天红的保质期存在18个月和24个月两个版本。为避免误导，需要先确认具体 SKU、批次或实物标签；无法确认时应由人工客服协助核验。", recommendations: [], recommendationSkus: [], sources: sourceById("KB004", "KB009"), execution: completedExecution("product_question", "识别到保质期版本冲突", 2, 0) };
 
   if (intentResult.intent === "price_compare") {
@@ -242,6 +249,11 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   if (intentResult.intent === "price_reverse_lookup") {
     const answer = priceReverseAnswer(entities.priceAmounts ?? []);
     if (answer) return { answer, recommendations: [], recommendationSkus: unique(pricesForAmounts(entities.priceAmounts ?? []).map(skuForPrice).filter((sku): sku is TeaSku => Boolean(sku))).map((sku) => asRetrievedSku(sku, "命中价格反查记录")), sources: sourceById("KB006"), execution: completedExecution("price_reverse_lookup", `反查 ¥${(entities.priceAmounts ?? []).join(" / ¥")}`, 1, 0) };
+  }
+  if (intentResult.intent === "product_existence" && !(entities.productIds?.length)) {
+    const requested = requestedCatalogTerm(query) ?? "这款茶";
+    const mainTeaNames = unique(teaProducts.map((product) => product.name)).join("、");
+    return { answer: `当前已收录商品中没有${requested}。目前主要收录${mainTeaNames}；你可以继续问这些茶的规格、价格、冲泡或送礼选择。`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("product_existence", `未收录商品：${requested}`, 1, 0) };
   }
   if (intentResult.intent === "brand_question") return { answer: "不是。一叶春山的品牌宣传包含西湖产区及高端西湖龙井产品线，但不代表所有线上商品都是西湖龙井；品牌也存在钱塘产区产品。查询具体商品产区时，应以该商品当前参数页或实物标签为准。高端西湖龙井仅线下销售，当前价格和购买方式需进一步确认。", recommendations: [], recommendationSkus: [], sources: sourceById("KB001", "KB009"), execution: completedExecution("brand_question", "区分品牌宣传与具体商品资料", 2, 0) };
   if (intentResult.intent === "brewing_question") {

@@ -53,6 +53,7 @@ const knowledgeTypesByIntent: Record<TeaIntent, KnowledgeType[]> = {
   product_fit: ["tea_type", "recommendation", "sku"],
   gift_catalog: ["sku", "recommendation"],
   product_browse: ["sku", "tea_type"],
+  product_existence: ["sku", "tea_type"],
   product_recommendation: ["recommendation", "tea_type", "sku"],
   price_query: ["sku"],
   price_reverse_lookup: ["sku"],

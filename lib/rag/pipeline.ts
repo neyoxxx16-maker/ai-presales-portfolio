@@ -1,7 +1,8 @@
 import { teaKnowledge } from "@/data/tea/knowledge";
 import { teaPriceEvidence } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
-import { openAIProvider } from "@/lib/rag/providers";
+import { deepSeekProvider, isDeepSeekConfigured } from "@/lib/rag/deepseek-provider";
+import { embedLocally } from "@/lib/rag/local-embeddings";
 import { loadTeaVectorIndex, RAG_CONFIG, searchTeaVectorIndex } from "@/lib/rag/vector-store";
 import type { GroundedOutput, RagRequest } from "@/lib/rag/types";
 import type { TeaAnswer, TeaResponseMode, TeaTurnResult } from "@/types/tea";
@@ -36,17 +37,17 @@ function withMode(answer: TeaAnswer, mode: TeaResponseMode) { return { ...answer
 
 export async function enhanceWithLiveRag(query: string, turn: TeaTurnResult) {
   const intent = classifyTeaIntent(query).intent;
-  if (!process.env.LLM_API_KEY || !ragIntents.has(intent) || turn.state.pendingDialog) return withMode(turn.answer, "structured");
+  if (!isDeepSeekConfigured() || !ragIntents.has(intent) || turn.state.pendingDialog) return withMode(turn.answer, "structured");
   try {
     const index = await loadTeaVectorIndex();
     if (!index) return withMode(turn.answer, "fallback");
-    const queryEmbedding = (await openAIProvider.embedMany([query]))[0];
+    const queryEmbedding = (await embedLocally([query]))[0];
     const productIds = turn.answer.recommendations.flatMap((product) => [product.id]);
     const retrieval = searchTeaVectorIndex(index, queryEmbedding, { productIds, categories: categoryByIntent[intent] });
     if (retrieval.insufficientContext) return withMode(turn.answer, "fallback");
     const request: RagRequest = { query, intent, productIds, structuredFacts: structuredFacts(turn.answer), allowedCitationIds: retrieval.hits.map((hit) => hit.id) };
     const groundedPrompt = promptFor(request, retrieval.hits.map((hit) => `[${hit.id}] ${hit.title}\n${hit.content}`).join("\n\n"));
-    const output = validateGroundedOutput(await openAIProvider.generate(groundedPrompt, query), request);
+    const output = validateGroundedOutput(await deepSeekProvider.generate(groundedPrompt, query), request);
     if (!output) return withMode(turn.answer, "fallback");
     const sources = output.citations.map((id) => teaKnowledge.find((document) => document.id === id)).filter((document): document is NonNullable<typeof document> => Boolean(document)).map((document) => ({ ...document, score: 100, matchReasons: ["实时 RAG 引用"] }));
     return { ...withMode(turn.answer, "live-rag"), answer: output.followUp ? `${output.answer}\n${output.followUp}` : output.answer, sources };

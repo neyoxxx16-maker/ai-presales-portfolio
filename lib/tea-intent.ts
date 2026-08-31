@@ -161,6 +161,7 @@ export function classifyTeaIntent(query: string, options?: { referenceUnitPrice?
   const hasComparePhrase = includesAny(normalized, ["有什么区别", "区别", "哪个", "更", "比较", "对比"]);
   const hasPriceLookupPhrase = includesAny(normalized, ["哪款", "哪个商品", "什么商品", "对应哪些产品", "对应什么产品", "这个价格", "的是哪个"]);
   const isExtreme = includesAny(normalized, ["最贵", "最便宜"]);
+  const hasCatalogExistenceQuestion = /^(?:(?:你们|这里|店里)?\s*.+?(?:有吗|有没有|有没)|(?:你们|这里|店里)?\s*有\s*(?!哪些|什么|什么产品|哪些产品).+?吗)[？?。！!]*$/.test(normalized);
   let intent: TeaIntent = "unknown";
   if (amounts.length >= 2 && hasComparePhrase && !hasQuantityPurchaseRelation) intent = "price_compare";
   else if (hasQuantityPurchaseRelation) intent = "quantity_price_calc";
@@ -171,6 +172,7 @@ export function classifyTeaIntent(query: string, options?: { referenceUnitPrice?
   else if (includesAny(normalized, ["怎么泡", "冲泡", "泡法", "水温", "茶水比", "投茶量"])) intent = "brewing_question";
   else if (includesAny(normalized, ["所有茶都是西湖", "西湖龙井", "钱塘产区", "高端西湖龙井", "网上买吗", "线上买吗"])) intent = "brand_question";
   else if (includesAny(normalized, ["发货", "碎茶", "退货", "退款", "售后", "储存", "保存"])) intent = "aftersales";
+  else if (hasCatalogExistenceQuestion) intent = "product_existence";
   else if (includesAny(normalized, ["有哪些", "都有什么", "礼盒有哪些", "给我看看送礼的", "有什么可以选", "你们卖什么", "有什么产品", "有哪些茶"]) || (normalized.includes("有什么") && !normalized.includes("有什么推荐") && includesAny(normalized, ["礼盒", "双拼", "双盒", "产品", "茶"]))) intent = entities.scene === "送礼" || entities.packaging === "礼盒" ? "gift_catalog" : "product_browse";
   else if (includesAny(normalized, ["适合什么人", "适合谁", "什么人喝", "我适合喝吗", "适合哪种口味", "谁会喜欢", "什么人比较喜欢", "适合送什么人", "适合什么"]) || (Boolean(entities.preference) && !entities.budget && !entities.scene && !normalized.includes("推荐"))) intent = "product_fit";
   else if (includesAny(normalized, ["推荐", "选什么", "适合我", "想买", "能买什么"]) || Boolean(entities.budget) || Boolean(entities.requiredTeaTypes?.length) || Boolean(entities.excludedProductIds?.length) || (Boolean(entities.preference) && Boolean(entities.budget || entities.scene))) intent = "product_recommendation";

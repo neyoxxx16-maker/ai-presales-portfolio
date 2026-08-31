@@ -5,3 +5,4 @@ node_modules/
 .env.local
 .env.*
 !.env.example
+data/generated/tea-vector-index.json
