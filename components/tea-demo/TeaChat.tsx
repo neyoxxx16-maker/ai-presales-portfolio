@@ -25,7 +25,10 @@ export function TeaChat() {
   function submitQuestion() {
     const question = input.trim();
     if (!question) return;
-    const answer = buildTeaAnswer(question);
+    const answer = buildTeaAnswer(question, {
+      priorUserQueries: messages.filter((message) => message.role === "user").map((message) => message.content),
+      priorAnswers: messages.flatMap((message) => message.answer ? [message.answer] : []),
+    });
     setMessages((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: "user", content: question },

@@ -101,10 +101,10 @@ function populateHardFilters(query: string, entities: TeaEntities) {
   }
 }
 
-export function classifyTeaIntent(query: string): IntentResult {
+export function classifyTeaIntent(query: string, options?: { referenceUnitPrice?: number }): IntentResult {
   const normalized = query.trim().toLowerCase();
   const entities: TeaEntities = {};
-  const budgetMatch = normalized.match(/(?:预算|只有|有)\s*[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:以内|以下)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)\s*(?:元|块)/);
+  const budgetMatch = normalized.match(/(?:预算|只有|有)\s*[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:以内|以下)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)\s*(?:元|块)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:能|可以|够)?买/);
   if (budgetMatch) entities.budget = Number(budgetMatch[1]);
   const amounts = parsePriceAmounts(normalized);
   if (amounts.length) entities.priceAmounts = amounts;
@@ -135,10 +135,13 @@ export function classifyTeaIntent(query: string): IntentResult {
   if (teaType) entities.teaType = teaType;
 
   const quantityMatch = normalized.match(/([一二两三四五六七八九十\d]+)\s*(?:盒|份|件)/);
-  if (quantityMatch && amounts.length >= 2) {
+  if (quantityMatch) {
     entities.quantity = parseQuantity(quantityMatch[1]);
-    const numberAfterQuantity = normalized.slice((quantityMatch.index ?? 0) + quantityMatch[0].length).match(/(\d+(?:\.\d+)?)/);
-    entities.unitPrice = numberAfterQuantity ? Number(numberAfterQuantity[1]) : amounts.find((amount) => amount !== entities.budget);
+    if (amounts.length >= 2) {
+      const numberAfterQuantity = normalized.slice((quantityMatch.index ?? 0) + quantityMatch[0].length).match(/(\d+(?:\.\d+)?)/);
+      entities.unitPrice = numberAfterQuantity ? Number(numberAfterQuantity[1]) : amounts.find((amount) => amount !== entities.budget);
+    }
+    if (entities.unitPrice === undefined && options?.referenceUnitPrice !== undefined) entities.unitPrice = options.referenceUnitPrice;
   }
 
   const hasComparePhrase = includesAny(normalized, ["有什么区别", "区别", "哪个", "更", "比较", "对比"]);

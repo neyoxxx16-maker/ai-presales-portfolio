@@ -68,9 +68,10 @@ const cases = [
   { question: "我不喜欢红茶，预算500送礼", contains: ["桂花龙井双盒", "¥418"], intent: "product_recommendation", skuIds: ["osmanthus-longjing-double-box"], absentSkuIds: ["longjing-black-tea-duo", "osmanthus-duo-gift", "osmanthus-black-tea-double-box"] },
   { question: "我只要红茶，100元以内", contains: ["没有合适选项"], intent: "product_recommendation", absentSkuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g", "osmanthus-longjing-single-60g"] },
   { question: "桂花龙井和桂花红茶有什么区别？", contains: ["调味绿茶", "桂花甜香", "调味红茶", "红茶暖香"], intent: "product_compare", sourceTypesPresent: ["tea_type"], sourceTypesAbsent: ["sku"] },
-  { question: "桂花红茶和桂花龙井哪个更清爽？", contains: ["桂花龙井更匹配", "鲜爽", "红茶暖香"], intent: "product_compare", sourceTypesPresent: ["tea_type"] },
+  { question: "桂花红茶和桂花龙井哪个更清爽？", contains: ["更推荐桂花龙井", "入口更鲜爽、轻快", "桂花红茶则以桂花鲜灵清甜和红茶暖香为主"], intent: "product_compare", sourceTypesPresent: ["tea_type"] },
   { question: "500块可以买两盒298的吗？", contains: ["2 盒共 ¥596", "超过 ¥500 预算 ¥96", "最多可以买 1 盒"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
   { question: "600块可以买两盒298的吗？", contains: ["可以", "2 盒共 ¥596", "剩余 ¥4"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
+  { question: "418对应哪些产品？最便宜的礼盒是哪款？", contains: ["桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒", "桂花红茶礼盒", "最便宜", "龙井红茶礼盒", "新客价 ¥288"] },
 ];
 
 let passed = 0;
@@ -94,4 +95,10 @@ for (const testCase of cases) {
   passed += 1;
 }
 
-console.log(`Tea assistant regression: ${passed}/${cases.length} passed`);
+const contextualQuantityAnswer = buildTeaAnswer("500能买两盒吗？", { priorUserQueries: ["298是哪款？"] });
+assert.ok(contextualQuantityAnswer.answer.includes("上一轮提到的 ¥298"), "contextual quantity question should resolve the preceding price");
+assert.ok(contextualQuantityAnswer.answer.includes("2 盒共 ¥596"), "contextual quantity question should calculate the total");
+assert.ok(contextualQuantityAnswer.execution.some((step) => step.detail?.includes("上轮上下文")), "contextual quantity question should report its reference source");
+passed += 1;
+
+console.log(`Tea assistant regression: ${passed}/${cases.length + 1} passed`);

@@ -119,4 +119,5 @@ export type RetrievalResult = { products: RetrievedProduct[]; skus: RetrievedSku
 
 export type ExecutionStep = { label: string; detail?: string; status: "completed" | "empty" | "pending" };
 export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; recommendationSkus?: RetrievedSku[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[] };
+export type TeaConversationContext = { priorUserQueries?: string[]; priorAnswers?: TeaAnswer[] };
 export type ChatMessage = { id: string; role: "assistant" | "user"; content: string; answer?: TeaAnswer };

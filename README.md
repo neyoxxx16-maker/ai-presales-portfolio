@@ -7,7 +7,7 @@
 - Phase 1：项目初始化 + 基础框架 + 首页视觉完成
 - Phase 2：在线简历页完成
 - Phase 3：一叶春山 AI 导购交互 POC 完成
-- Phase 3.5：Verified Project Knowledge Base 完成
+- Phase 3.5：Verified Project Knowledge Base 与最终逻辑验收进行中
 
 ## 技术栈
 
@@ -48,6 +48,6 @@ Phase 3 使用本地 Mock 数据验证 UI 与交互。Phase 3.5 已将旧 Mock �
 
 该知识库属于个人作品集 POC，不是品牌生产系统；不连接真实支付、库存、订单、物流或客户隐私数据。
 
-## 下一阶段
+## 当前阶段
 
-Phase 3：一叶春山 AI 导购 UI + Mock 数据。
+继续完成 Phase 3.5 的逻辑验收、自动化回归与构建验证。在这些检查全部稳定前，不进入下一阶段。

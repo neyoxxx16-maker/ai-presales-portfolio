@@ -2,7 +2,7 @@ import { teaKnowledge } from "@/data/tea/knowledge";
 import { teaPriceEvidence, teaProducts, teaSkus } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
 import { retrieveTeaKnowledge } from "@/lib/tea-retrieval";
-import type { PriceEvidence, RetrievedKnowledge, RetrievedProduct, RetrievedSku, TeaAnswer, TeaEntities, TeaIntent, TeaProduct, TeaSku } from "@/types/tea";
+import type { PriceEvidence, RetrievedKnowledge, RetrievedProduct, RetrievedSku, TeaAnswer, TeaConversationContext, TeaEntities, TeaIntent, TeaProduct, TeaSku } from "@/types/tea";
 
 const intentLabels: Record<TeaIntent, string> = {
   product_recommendation: "个性化推荐", product_question: "产品问答", product_fit: "口味适配", product_compare: "茶品对比", gift_catalog: "礼盒浏览", product_browse: "商品浏览", price_query: "价格查询", price_reverse_lookup: "价格反查", price_compare: "价格对比", price_extreme: "价格排序", quantity_price_calc: "数量与预算计算", brewing_question: "冲泡问答", brand_question: "品牌与产区问答", aftersales: "售后问答", unknown: "边界或未支持问题",
@@ -11,6 +11,7 @@ const intentLabels: Record<TeaIntent, string> = {
 const productKnowledgeIds: Record<string, string> = { "mingqian-longjing": "KB002", "osmanthus-longjing": "KB003", "longjing-black-tea": "KB004", "osmanthus-black-tea": "KB005" };
 const includesAny = (query: string, terms: string[]) => terms.some((term) => query.includes(term));
 const unique = <T,>(items: T[]) => [...new Set(items)];
+const uniqueById = <T extends { id: string },>(items: T[]) => Array.from(new Map(items.map((item) => [item.id, item])).values());
 
 function entitySummary(entities: TeaEntities) {
   return [entities.budget !== undefined && `预算：¥${entities.budget}`, entities.scene && `场景：${entities.scene}`, entities.audience && `对象：${entities.audience}`, entities.preference && `偏好：${entities.preference}`, entities.requiredTeaTypes?.length && `限定茶类：${entities.requiredTeaTypes.join("/")}`, entities.packaging && `规格需求：${entities.packaging}`].filter(Boolean).join(" · ") || "未提取到明确偏好";
@@ -160,17 +161,61 @@ function quantityPriceAnswer(entities: TeaEntities) {
 function productComparisonAnswer(productIds: string[], normalized: string) {
   const products = productIds.map((id) => teaProducts.find((product) => product.id === id)).filter((product): product is TeaProduct => Boolean(product));
   if (products.length < 2) return undefined;
-  const lines = products.map((product) => `- ${product.name}：${product.category}；${product.flavor.slice(0, 4).join("、")}。`);
   const focusesFreshness = includesAny(normalized, ["清爽", "鲜爽", "清香", "清新"]);
   const freshnessProduct = products.find((product) => product.flavor.some((flavor) => flavor.includes("鲜爽")));
-  const conclusion = focusesFreshness && freshnessProduct ? `如果重点是清爽 / 鲜爽，${freshnessProduct.name}更匹配；另一款则更偏${products.find((product) => product.id !== freshnessProduct.id)?.flavor.slice(0, 2).join("、")}。` : "两者的差别主要在茶类、香气方向和口感重心；可再结合预算与饮用场景选择具体规格。";
-  return `${lines.join("\n")}\n${conclusion}`;
+  if (focusesFreshness && freshnessProduct) {
+    const otherProduct = products.find((product) => product.id !== freshnessProduct.id);
+    return `如果你更看重清爽感，我会更推荐${freshnessProduct.name}。它把${freshnessProduct.flavor.slice(0, 2).join("和")}放在前面，入口更鲜爽、轻快；${otherProduct?.name ?? "另一款"}则以${otherProduct?.flavor.slice(0, 2).join("和")}为主，整体更温润顺滑。想要日常喝得清新一些，选${freshnessProduct.name}会更合适。`;
+  }
+  const [firstProduct, secondProduct] = products;
+  return `${firstProduct.name}和${secondProduct.name}都带有花香调，但风格并不相同：${firstProduct.name}属于${firstProduct.category}，偏${firstProduct.flavor.slice(0, 2).join("、")}，口感更轻快；${secondProduct.name}属于${secondProduct.category}，偏${secondProduct.flavor.slice(0, 2).join("、")}，喝起来更温润醇和。若你告诉我是自饮还是送礼，我可以再帮你落到具体规格。`;
 }
 
-export function buildTeaAnswer(query: string): TeaAnswer {
+function knownPricesInText(text: string) {
+  return unique([...text.matchAll(/(?:[¥￥]\s*)?(\d+(?:\.\d+)?)(?:\s*(?:元|块))?/g)]
+    .map((match) => Number(match[1]))
+    .filter((amount) => teaPriceEvidence.some((price) => priceMatchesAmount(price, amount))));
+}
+
+function resolveReferencedUnitPrice(query: string, context?: TeaConversationContext) {
+  const hasQuantity = /[一二两三四五六七八九十\d]+\s*(?:盒|份|件)/.test(query);
+  if (!hasQuantity || knownPricesInText(query).length) return undefined;
+  const previousQueries = [...(context?.priorUserQueries ?? [])].reverse();
+  for (const previousQuery of previousQueries) {
+    const prices = knownPricesInText(previousQuery);
+    if (prices.length === 1) return prices[0];
+  }
+  const previousAnswers = [...(context?.priorAnswers ?? [])].reverse();
+  for (const previousAnswer of previousAnswers) {
+    const prices = unique((previousAnswer.recommendationSkus ?? []).flatMap((sku) => sku.priceEvidenceIds ?? []).map((id) => teaPriceEvidence.find((price) => price.id === id)?.amount).filter((amount): amount is number => amount !== undefined));
+    if (prices.length === 1) return prices[0];
+  }
+  return undefined;
+}
+
+function splitCompoundQuery(query: string) {
+  const parts = query.split(/[？?；;]/).map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts : [];
+}
+
+export function buildTeaAnswer(query: string, context?: TeaConversationContext, allowCompound = true): TeaAnswer {
+  const compoundParts = allowCompound ? splitCompoundQuery(query) : [];
+  if (compoundParts.length) {
+    const answers = compoundParts.map((part) => ({ question: part, result: buildTeaAnswer(part, context, false) }));
+    const recommendationSkus = uniqueById(answers.flatMap(({ result }) => result.recommendationSkus ?? []));
+    return {
+      answer: answers.map(({ question, result }) => `关于“${question}”：${result.answer}`).join("\n\n"),
+      recommendations: uniqueById(answers.flatMap(({ result }) => result.recommendations)),
+      recommendationSkus,
+      sources: uniqueById(answers.flatMap(({ result }) => result.sources)),
+      execution: completedExecution("product_question", `识别到 ${answers.length} 个子问题并分别回答`, uniqueById(answers.flatMap(({ result }) => result.sources)).length, recommendationSkus.length),
+    };
+  }
+
+  const referenceUnitPrice = resolveReferencedUnitPrice(query, context);
   const normalized = query.toLowerCase();
-  const intentResult = classifyTeaIntent(query);
-  const retrieval = retrieveTeaKnowledge(query, intentResult);
+  const intentResult = classifyTeaIntent(query, { referenceUnitPrice });
+  const retrieval = retrieveTeaKnowledge(referenceUnitPrice === undefined ? query : `${query} ¥${referenceUnitPrice}`, intentResult);
   const entities = intentResult.entities;
 
   if (includesAny(normalized, ["治疗", "治失眠", "失眠", "减肥", "降血压", "医疗功效"])) return { answer: "我不能对茶品作治疗疾病、改善失眠或减肥等医疗功效承诺。当前资料也没有支持这类结论的依据；如涉及健康问题，请咨询专业人士。", recommendations: [], recommendationSkus: [], sources: sourceById("KB009"), execution: completedExecution("unknown", "医疗功效边界", 1, 0) };
@@ -183,7 +228,7 @@ export function buildTeaAnswer(query: string): TeaAnswer {
   }
   if (intentResult.intent === "quantity_price_calc") {
     const answer = quantityPriceAnswer(entities);
-    if (answer) return { answer, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("quantity_price_calc", `数量：${entities.quantity} · 单价：¥${entities.unitPrice}`, 1, 1) };
+    if (answer) return { answer: referenceUnitPrice === undefined ? answer : `按上一轮提到的 ¥${referenceUnitPrice} 计算：${answer}`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("quantity_price_calc", `数量：${entities.quantity} · 单价：¥${entities.unitPrice}${referenceUnitPrice === undefined ? "" : "（来自上轮上下文）"}`, 1, 1) };
   }
   if (intentResult.intent === "price_extreme") {
     const answer = extremePriceAnswer(entities, normalized.includes("最便宜"));
