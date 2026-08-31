@@ -8,3 +8,16 @@ export const teaSources: SourceRecord[] = [
   { sourceId: "S04", sourceName: "包装标签与历史设计稿", sourceType: "包装与历史资料", version: null, sourceDate: null, evidenceLevel: "历史包装资料" },
   { sourceId: "S05", sourceName: "用户补充说明", sourceType: "确认业务口径", version: "V1.1", sourceDate: null, evidenceLevel: "已确认业务口径" },
 ];
+
+// 面向访客的来源名称。原始 sourceId、来源文件名和证据等级仍保留在内部注册表中。
+export const teaSourceDisplayNames: Record<SourceRecord["sourceId"], string> = {
+  S01: "产品手册",
+  S02: "产品参数与使用说明",
+  S03: "商品销售页面",
+  S04: "商品包装与标签资料",
+  S05: "业务补充资料",
+};
+
+export function getTeaSourceDisplayNames(sourceIds: string[]) {
+  return [...new Set(sourceIds.map((sourceId) => teaSourceDisplayNames[sourceId]).filter(Boolean))];
+}
