@@ -20,6 +20,7 @@ require.extensions[".ts"] = function compileTypeScript(module, filename) {
 
 const { buildTeaAnswer } = require("../lib/tea-response.ts");
 const { classifyTeaIntent } = require("../lib/tea-intent.ts");
+const { processTeaTurn } = require("../lib/tea-conversation.ts");
 const { teaPriceEvidence } = require("../data/tea/products.ts");
 
 const cases = [
@@ -112,4 +113,63 @@ for (const question of quantityIntentPhrases) {
   passed += 1;
 }
 
-console.log(`Tea assistant regression: ${passed}/${cases.length + 8} passed`);
+let quantityDialogState = {};
+const quantityTurn1 = processTeaTurn("500能买两盒吗？", quantityDialogState);
+quantityDialogState = quantityTurn1.state;
+assert.equal(quantityTurn1.intent, "quantity_price_calc", "first quantity turn intent");
+assert.equal(quantityDialogState.pendingDialog?.slots.budget, 500, "pending quantity budget");
+assert.equal(quantityDialogState.pendingDialog?.slots.quantity, 2, "pending quantity");
+assert.deepEqual(quantityDialogState.pendingDialog?.missingSlots, ["product_or_unit_price"], "pending missing slot");
+const quantityTurn2 = processTeaTurn("明前龙井", quantityDialogState);
+quantityDialogState = quantityTurn2.state;
+assert.equal(quantityTurn2.intent, "quantity_price_calc", "product slot should continue quantity dialog");
+assert.ok(quantityTurn2.answer.answer.includes("明前龙井有不同规格"), "ambiguous product should ask for a specification");
+assert.ok(quantityDialogState.pendingDialog, "ambiguous product should keep the dialog pending");
+const quantityTurn3 = processTeaTurn("60g那个", quantityDialogState);
+assert.equal(quantityTurn3.intent, "quantity_price_calc", "specification should complete quantity dialog");
+assert.ok(quantityTurn3.answer.answer.includes("明前龙井单罐"), "selected SKU should be named");
+assert.ok(quantityTurn3.answer.answer.includes("¥218"), "selected SKU total");
+assert.ok(quantityTurn3.answer.answer.includes("剩余 ¥282"), "selected SKU remainder");
+assert.equal(quantityTurn3.state.pendingDialog, undefined, "completed quantity dialog should clear pending state");
+passed += 1;
+
+let directPriceState = processTeaTurn("500能买两盒吗？").state;
+const directPriceTurn = processTeaTurn("298的", directPriceState);
+assert.equal(directPriceTurn.intent, "quantity_price_calc", "price-only follow-up should continue quantity dialog");
+assert.ok(directPriceTurn.answer.answer.includes("2 盒共 ¥596"), "price-only follow-up total");
+assert.ok(directPriceTurn.answer.answer.includes("超过 ¥500 预算 ¥96"), "price-only follow-up over budget");
+assert.equal(directPriceTurn.state.pendingDialog, undefined, "price-only follow-up should clear pending state");
+passed += 1;
+
+let productOnlyState = processTeaTurn("两盒多少钱？").state;
+const productOnlyTurn = processTeaTurn("桂花红茶", productOnlyState);
+assert.equal(productOnlyTurn.intent, "quantity_price_calc", "ambiguous product should not become a product question");
+assert.ok(productOnlyTurn.answer.answer.includes("桂花红茶有不同规格"), "ambiguous product should request a specification");
+assert.ok(productOnlyTurn.state.pendingDialog, "ambiguous product should remain pending");
+passed += 1;
+
+let cancelledState = processTeaTurn("500能买两盒吗？").state;
+const cancelledTurn = processTeaTurn("算了，桂花红茶怎么泡？", cancelledState);
+assert.equal(cancelledTurn.intent, "brewing_question", "explicit new topic should cancel pending quantity dialog");
+assert.equal(cancelledTurn.state.pendingDialog, undefined, "new topic should clear pending dialog");
+assert.ok(cancelledTurn.answer.answer.includes("95-100℃"), "new brewing question should be answered");
+passed += 1;
+
+const inheritedPriceTurn = processTeaTurn("500能买两盒吗？", {}, { priorUserQueries: ["298是哪款？"] });
+assert.ok(inheritedPriceTurn.answer.answer.includes("2 盒共 ¥596"), "history price should complete the quantity calculation");
+assert.equal(inheritedPriceTurn.state.pendingDialog, undefined, "completed history calculation must not create a pending dialog");
+passed += 1;
+
+let recommendationState = processTeaTurn("预算500，只要绿茶，有什么推荐？").state;
+const recommendationFollowUp = processTeaTurn("不要桂花", recommendationState);
+assert.equal(recommendationFollowUp.intent, "product_recommendation", "recommendation constraint should continue the prior recommendation");
+assert.ok(!(recommendationFollowUp.answer.recommendationSkus ?? []).some((sku) => sku.productIds.includes("osmanthus-longjing")), "recommendation follow-up should exclude osmanthus products");
+passed += 1;
+
+let priceCandidatesState = processTeaTurn("418对应哪些产品？").state;
+const priceCandidatesFollowUp = processTeaTurn("哪个更适合送人？", priceCandidatesState);
+assert.equal(priceCandidatesFollowUp.intent, "product_fit", "which-product follow-up should use prior candidates");
+assert.ok(priceCandidatesFollowUp.answer.answer.includes("上一轮对应的候选"), "which-product follow-up should reference the prior candidate set");
+passed += 1;
+
+console.log(`Tea assistant regression: ${passed}/${cases.length + 15} passed`);

@@ -123,4 +123,15 @@ export type RetrievalResult = { products: RetrievedProduct[]; skus: RetrievedSku
 export type ExecutionStep = { label: string; detail?: string; status: "completed" | "empty" | "pending" };
 export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; recommendationSkus?: RetrievedSku[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[] };
 export type TeaConversationContext = { priorUserQueries?: string[]; priorAnswers?: TeaAnswer[] };
+export type PendingQuantityDialog = {
+  intent: "quantity_price_calc";
+  slots: { budget?: number; quantity?: number; productId?: string; unitPrice?: number; candidateSkuIds?: string[] };
+  missingSlots: Array<"product_or_unit_price" | "sku_specification">;
+};
+export type TeaConversationState = {
+  pendingDialog?: PendingQuantityDialog;
+  lastRecommendationQuery?: string;
+  lastCandidateSkuIds?: string[];
+};
+export type TeaTurnResult = { answer: TeaAnswer; state: TeaConversationState; intent: TeaIntent };
 export type ChatMessage = { id: string; role: "assistant" | "user"; content: string; answer?: TeaAnswer };

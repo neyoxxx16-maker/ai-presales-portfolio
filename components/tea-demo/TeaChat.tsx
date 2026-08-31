@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { ArrowUp, Bot, Sparkles } from "lucide-react";
-import { buildTeaAnswer } from "@/lib/tea-response";
+import { processTeaTurn } from "@/lib/tea-conversation";
 import { ExecutionPanel } from "@/components/tea-demo/ExecutionPanel";
 import { ProductRecommendation } from "@/components/tea-demo/ProductRecommendation";
 import { SourceList } from "@/components/tea-demo/SourceList";
-import type { ChatMessage, ExecutionStep } from "@/types/tea";
+import type { ChatMessage, ExecutionStep, TeaConversationState } from "@/types/tea";
 
 const exampleQuestions = [
   "预算 500 元，想送长辈，喜欢清香一点，有什么推荐？",
@@ -21,20 +21,23 @@ export function TeaChat() {
     { id: "welcome", role: "assistant", content: "你好，我是「一叶春山」知识库 POC 导购。你可以告诉我预算、送礼对象、口感偏好，或询问已收录商品与冲泡方式。" },
   ]);
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
+  const [conversationState, setConversationState] = useState<TeaConversationState>({});
 
   function submitQuestion() {
     const question = input.trim();
     if (!question) return;
-    const answer = buildTeaAnswer(question, {
+    const turn = processTeaTurn(question, conversationState, {
       priorUserQueries: messages.filter((message) => message.role === "user").map((message) => message.content),
       priorAnswers: messages.flatMap((message) => message.answer ? [message.answer] : []),
     });
+    const answer = turn.answer;
     setMessages((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: "user", content: question },
       { id: `assistant-${Date.now()}`, role: "assistant", content: answer.answer, answer },
     ]);
     setSteps(answer.execution);
+    setConversationState(turn.state);
     setInput("");
   }
 
