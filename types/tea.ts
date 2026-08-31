@@ -91,6 +91,7 @@ export type KnowledgeDocument = {
 
 export type TeaIntent = "product_recommendation" | "product_question" | "product_fit" | "product_compare" | "gift_catalog" | "product_browse" | "price_query" | "price_reverse_lookup" | "price_compare" | "price_extreme" | "quantity_price_calc" | "brewing_question" | "brand_question" | "aftersales" | "unknown";
 export type PriceScope = "all" | "gift_box" | "single_can" | "trial";
+export type QuantityPriceStatus = "complete" | "missing_unit_price_or_product" | "missing_budget";
 export type TeaEntities = {
   budget?: number;
   scene?: string;
@@ -107,7 +108,9 @@ export type TeaEntities = {
   priceAmounts?: number[];
   priceScope?: PriceScope;
   quantity?: number;
+  quantityMode?: "exact" | "maximum";
   unitPrice?: number;
+  quantityPriceStatus?: QuantityPriceStatus;
 };
 export type IntentResult = { intent: TeaIntent; entities: TeaEntities };
 

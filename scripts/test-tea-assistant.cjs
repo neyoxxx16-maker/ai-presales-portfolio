@@ -69,8 +69,12 @@ const cases = [
   { question: "我只要红茶，100元以内", contains: ["没有合适选项"], intent: "product_recommendation", absentSkuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g", "osmanthus-longjing-single-60g"] },
   { question: "桂花龙井和桂花红茶有什么区别？", contains: ["调味绿茶", "桂花甜香", "调味红茶", "红茶暖香"], intent: "product_compare", sourceTypesPresent: ["tea_type"], sourceTypesAbsent: ["sku"] },
   { question: "桂花红茶和桂花龙井哪个更清爽？", contains: ["更推荐桂花龙井", "入口更鲜爽、轻快", "桂花红茶则以桂花鲜灵清甜和红茶暖香为主"], intent: "product_compare", sourceTypesPresent: ["tea_type"] },
-  { question: "500块可以买两盒298的吗？", contains: ["2 盒共 ¥596", "超过 ¥500 预算 ¥96", "最多可以买 1 盒"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
-  { question: "600块可以买两盒298的吗？", contains: ["可以", "2 盒共 ¥596", "剩余 ¥4"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
+  { question: "500能买两盒吗？", contains: ["可以帮你算", "哪款商品", "单盒价格"], absent: ["以下商品更匹配"], intent: "quantity_price_calc", entities: { quantity: 2, budget: 500, quantityPriceStatus: "missing_unit_price_or_product" }, absentSkuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g", "osmanthus-longjing-single-60g"] },
+  { question: "500块可以买两盒298的吗？", contains: ["2 盒共 ¥596", "超过 ¥500 预算 ¥96", "最多可以买 1 盒"], intent: "quantity_price_calc", entities: { quantity: 2, unitPrice: 298, budget: 500, quantityPriceStatus: "complete" }, sourceTypesPresent: ["sku"] },
+  { question: "600块可以买两盒298的吗？", contains: ["可以", "2 盒共 ¥596", "剩余 ¥4"], intent: "quantity_price_calc", entities: { quantity: 2, unitPrice: 298, budget: 600, quantityPriceStatus: "complete" }, sourceTypesPresent: ["sku"] },
+  { question: "500能买几个298的？", contains: ["最多可以买 1 个 ¥298 的商品", "剩余 ¥202"], intent: "quantity_price_calc", entities: { quantityMode: "maximum", unitPrice: 298, budget: 500, quantityPriceStatus: "complete" } },
+  { question: "298的买两盒多少钱？", contains: ["2 盒共 ¥596"], intent: "quantity_price_calc", entities: { quantity: 2, unitPrice: 298, quantityPriceStatus: "complete" } },
+  { question: "109一盒，500可以买几盒？", contains: ["最多可以买 4 个 ¥109 的商品", "剩余 ¥64"], intent: "quantity_price_calc", entities: { quantityMode: "maximum", unitPrice: 109, budget: 500, quantityPriceStatus: "complete" } },
   { question: "418对应哪些产品？最便宜的礼盒是哪款？", contains: ["桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒", "桂花红茶礼盒", "最便宜", "龙井红茶礼盒", "新客价 ¥288"] },
 ];
 
@@ -86,6 +90,7 @@ for (const testCase of cases) {
   for (const text of testCase.contains) assert.ok(responseFacts.includes(text), `${testCase.question} should include: ${text}`);
   for (const text of testCase.absent ?? []) assert.ok(!result.answer.includes(text), `${testCase.question} should not include: ${text}`);
   if (testCase.intent) assert.equal(intent, testCase.intent, `${testCase.question} intent`);
+  for (const [key, value] of Object.entries(testCase.entities ?? {})) assert.equal(classifyTeaIntent(testCase.question).entities[key], value, `${testCase.question} entity ${key}`);
   for (const skuId of testCase.skuIds ?? []) assert.ok((result.recommendationSkus ?? []).some((sku) => sku.id === skuId), `${testCase.question} should recommend: ${skuId}`);
   for (const skuId of testCase.absentSkuIds ?? []) assert.ok(!(result.recommendationSkus ?? []).some((sku) => sku.id === skuId), `${testCase.question} must not recommend: ${skuId}`);
   for (const type of testCase.sourceTypesPresent ?? []) assert.ok(result.sources.some((source) => source.knowledgeType === type), `${testCase.question} should cite: ${type}`);
@@ -101,4 +106,10 @@ assert.ok(contextualQuantityAnswer.answer.includes("2 盒共 ¥596"), "contextua
 assert.ok(contextualQuantityAnswer.execution.some((step) => step.detail?.includes("上轮上下文")), "contextual quantity question should report its reference source");
 passed += 1;
 
-console.log(`Tea assistant regression: ${passed}/${cases.length + 1} passed`);
+const quantityIntentPhrases = ["500可以买两盒吗？", "500块够买两盒吗？", "500预算买两个够吗？", "两盒多少钱？", "买三盒要多少钱？", "刚才那个买两个多少钱？", "那款两盒够500吗？"];
+for (const question of quantityIntentPhrases) {
+  assert.equal(classifyTeaIntent(question).intent, "quantity_price_calc", `${question} should be quantity_price_calc`);
+  passed += 1;
+}
+
+console.log(`Tea assistant regression: ${passed}/${cases.length + 8} passed`);

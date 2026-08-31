@@ -149,10 +149,15 @@ function extremePriceAnswer(entities: TeaEntities, isLowest: boolean) {
 }
 
 function quantityPriceAnswer(entities: TeaEntities) {
-  if (!entities.quantity || entities.unitPrice === undefined || entities.budget === undefined) return undefined;
-  const matchedPrice = teaPriceEvidence.find((price) => price.amount === entities.unitPrice);
-  if (!matchedPrice) return `当前已录入资料中没有售价 / 新客价为 ¥${entities.unitPrice} 的商品，无法据此计算。`;
+  if (entities.quantityPriceStatus === "missing_unit_price_or_product" || entities.unitPrice === undefined) return "可以帮你算，不过要先知道你说的是哪款商品。告诉我商品名称或单盒价格就行。";
+  if (entities.quantityMode === "maximum") {
+    if (entities.budget === undefined) return "可以帮你算，不过还需要知道你的预算金额。告诉我预算后，我会算出最多可以买几盒。";
+    const maxCount = Math.floor(entities.budget / entities.unitPrice);
+    return `按 ¥${entities.unitPrice} 单价计算，¥${entities.budget} 最多可以买 ${maxCount} 个 ¥${entities.unitPrice} 的商品，剩余 ¥${entities.budget - maxCount * entities.unitPrice}。`;
+  }
+  if (!entities.quantity) return "可以帮你算，不过还需要确认购买数量。";
   const total = entities.quantity * entities.unitPrice;
+  if (entities.budget === undefined) return `按 ¥${entities.unitPrice} 单价计算，${entities.quantity} 盒共 ¥${total}。`;
   const maxCount = Math.floor(entities.budget / entities.unitPrice);
   if (total <= entities.budget) return `可以。按 ¥${entities.unitPrice} 单价计算，${entities.quantity} 盒共 ¥${total}，剩余 ¥${entities.budget - total}。该单价对应的商品需以具体组合、规格与包装为准。`;
   return `不能。按 ¥${entities.unitPrice} 单价计算，${entities.quantity} 盒共 ¥${total}，超过 ¥${entities.budget} 预算 ¥${total - entities.budget}。¥${entities.budget} 最多可以买 ${maxCount} 盒 ¥${entities.unitPrice} 的商品。`;
@@ -178,7 +183,7 @@ function knownPricesInText(text: string) {
 }
 
 function resolveReferencedUnitPrice(query: string, context?: TeaConversationContext) {
-  const hasQuantity = /[一二两三四五六七八九十\d]+\s*(?:盒|份|件)/.test(query);
+  const hasQuantity = /[一二两三四五六七八九十\d]+\s*(?:盒|份|件|个)|(?:能|可以|够)?买\s*几(?:个|盒|份|件)?/.test(query);
   if (!hasQuantity || knownPricesInText(query).length) return undefined;
   const previousQueries = [...(context?.priorUserQueries ?? [])].reverse();
   for (const previousQuery of previousQueries) {
@@ -228,7 +233,7 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   }
   if (intentResult.intent === "quantity_price_calc") {
     const answer = quantityPriceAnswer(entities);
-    if (answer) return { answer: referenceUnitPrice === undefined ? answer : `按上一轮提到的 ¥${referenceUnitPrice} 计算：${answer}`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("quantity_price_calc", `数量：${entities.quantity} · 单价：¥${entities.unitPrice}${referenceUnitPrice === undefined ? "" : "（来自上轮上下文）"}`, 1, 1) };
+    return { answer: referenceUnitPrice === undefined ? answer : `按上一轮提到的 ¥${referenceUnitPrice} 计算：${answer}`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("quantity_price_calc", entities.quantityPriceStatus === "missing_unit_price_or_product" ? "缺少商品或单盒价格" : entities.quantityMode === "maximum" ? `预算：¥${entities.budget} · 单价：¥${entities.unitPrice} · 计算最多可买数量${referenceUnitPrice === undefined ? "" : "（来自上轮上下文）"}` : `数量：${entities.quantity} · 单价：¥${entities.unitPrice}${referenceUnitPrice === undefined ? "" : "（来自上轮上下文）"}`, 1, 0) };
   }
   if (intentResult.intent === "price_extreme") {
     const answer = extremePriceAnswer(entities, normalized.includes("最便宜"));

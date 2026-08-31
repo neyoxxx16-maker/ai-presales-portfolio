@@ -104,7 +104,7 @@ function populateHardFilters(query: string, entities: TeaEntities) {
 export function classifyTeaIntent(query: string, options?: { referenceUnitPrice?: number }): IntentResult {
   const normalized = query.trim().toLowerCase();
   const entities: TeaEntities = {};
-  const budgetMatch = normalized.match(/(?:预算|只有|有)\s*[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:以内|以下)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)\s*(?:元|块)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:能|可以|够)?买/);
+  const budgetMatch = normalized.match(/(?:预算|只有|有)\s*[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:以内|以下)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)\s*(?:元|块)/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:能|可以|够)?买/) ?? normalized.match(/[￥¥]?(\d{2,5}(?:\.\d+)?)(?:\s*(?:元|块))?\s*预算/) ?? normalized.match(/够\s*[￥¥]?(\d{2,5}(?:\.\d+)?)/);
   if (budgetMatch) entities.budget = Number(budgetMatch[1]);
   const amounts = parsePriceAmounts(normalized);
   if (amounts.length) entities.priceAmounts = amounts;
@@ -134,22 +134,36 @@ export function classifyTeaIntent(query: string, options?: { referenceUnitPrice?
             : normalized.includes("绿茶") ? "绿茶" : undefined;
   if (teaType) entities.teaType = teaType;
 
-  const quantityMatch = normalized.match(/([一二两三四五六七八九十\d]+)\s*(?:盒|份|件)/);
+  const quantityMatch = normalized.match(/([一二两三四五六七八九十\d]+)\s*(?:盒|份|件|个)/);
+  const maximumQuantityRequested = /(?:能|可以|够)?买\s*几(?:个|盒|份|件)?|可以买\s*多少|最多\s*买/.test(normalized);
+  const hasQuantityExpression = Boolean(quantityMatch) || maximumQuantityRequested;
+  const hasQuantityPurchaseRelation = hasQuantityExpression && (includesAny(normalized, ["能买", "可以买", "够买", "买得了", "买得了吗", "够吗", "够不够", "多少钱", "要多少钱", "花多少钱", "买几个", "买多少"]) || /够\s*[￥¥]?\d/.test(normalized));
   if (quantityMatch) {
     entities.quantity = parseQuantity(quantityMatch[1]);
-    if (amounts.length >= 2) {
-      const numberAfterQuantity = normalized.slice((quantityMatch.index ?? 0) + quantityMatch[0].length).match(/(\d+(?:\.\d+)?)/);
-      entities.unitPrice = numberAfterQuantity ? Number(numberAfterQuantity[1]) : amounts.find((amount) => amount !== entities.budget);
-    }
+    entities.quantityMode = "exact";
+    const numberAfterQuantity = normalized.slice((quantityMatch.index ?? 0) + quantityMatch[0].length).match(/(\d+(?:\.\d+)?)/);
+    const numberBeforeQuantity = normalized.slice(0, quantityMatch.index ?? 0).match(/(\d+(?:\.\d+)?)(?:\s*(?:元|块))?(?:的)?(?:买)?\s*$/);
+    const pricePerItem = normalized.match(/(?:[￥¥]\s*)?(\d+(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:一)?(?:盒|份|件|个)/);
+    entities.unitPrice = numberAfterQuantity ? Number(numberAfterQuantity[1]) : numberBeforeQuantity ? Number(numberBeforeQuantity[1]) : pricePerItem ? Number(pricePerItem[1]) : undefined;
+    if (entities.unitPrice === undefined && amounts.length >= 2) entities.unitPrice = amounts.find((amount) => amount !== entities.budget);
     if (entities.unitPrice === undefined && options?.referenceUnitPrice !== undefined) entities.unitPrice = options.referenceUnitPrice;
+  }
+  if (maximumQuantityRequested) {
+    entities.quantityMode = "maximum";
+    const pricePerItem = normalized.match(/(?:[￥¥]\s*)?(\d+(?:\.\d+)?)(?:\s*(?:元|块))?\s*(?:一)?(?:盒|份|件|个)/);
+    entities.unitPrice = pricePerItem ? Number(pricePerItem[1]) : amounts.find((amount) => amount !== entities.budget);
+    if (entities.unitPrice === undefined && options?.referenceUnitPrice !== undefined) entities.unitPrice = options.referenceUnitPrice;
+  }
+  if (hasQuantityPurchaseRelation) {
+    entities.quantityPriceStatus = entities.unitPrice === undefined ? "missing_unit_price_or_product" : entities.quantityMode === "maximum" && entities.budget === undefined ? "missing_budget" : "complete";
   }
 
   const hasComparePhrase = includesAny(normalized, ["有什么区别", "区别", "哪个", "更", "比较", "对比"]);
   const hasPriceLookupPhrase = includesAny(normalized, ["哪款", "哪个商品", "什么商品", "对应哪些产品", "对应什么产品", "这个价格", "的是哪个"]);
   const isExtreme = includesAny(normalized, ["最贵", "最便宜"]);
   let intent: TeaIntent = "unknown";
-  if (amounts.length >= 2 && hasComparePhrase && !entities.quantity) intent = "price_compare";
-  else if (entities.quantity && entities.unitPrice !== undefined) intent = "quantity_price_calc";
+  if (amounts.length >= 2 && hasComparePhrase && !hasQuantityPurchaseRelation) intent = "price_compare";
+  else if (hasQuantityPurchaseRelation) intent = "quantity_price_calc";
   else if (isExtreme) intent = "price_extreme";
   else if (amounts.length && hasPriceLookupPhrase) intent = "price_reverse_lookup";
   else if (includesAny(normalized, ["多少钱", "价格", "价钱"])) intent = "price_query";
