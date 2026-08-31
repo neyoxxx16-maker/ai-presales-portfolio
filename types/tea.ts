@@ -89,8 +89,8 @@ export type KnowledgeDocument = {
   dataSource: "verified-project-source";
 };
 
-export type TeaIntent = "product_recommendation" | "product_question" | "brewing_question" | "gift_recommendation" | "unknown";
-export type TeaEntities = { budget?: number; scene?: string; audience?: string; preference?: string; teaType?: string; packaging?: string };
+export type TeaIntent = "product_recommendation" | "product_question" | "product_fit" | "gift_catalog" | "product_browse" | "price_query" | "brewing_question" | "brand_question" | "aftersales" | "unknown";
+export type TeaEntities = { budget?: number; scene?: string; audience?: string; preference?: string; teaType?: string; packaging?: string; productIds?: string[] };
 export type IntentResult = { intent: TeaIntent; entities: TeaEntities };
 
 export type RetrievedProduct = TeaProduct & { relatedSkus: TeaSku[]; score: number; matchReasons: string[] };
@@ -100,5 +100,5 @@ export type RetrievedKnowledge = KnowledgeDocument & { score: number; matchReaso
 export type RetrievalResult = { products: RetrievedProduct[]; skus: RetrievedSku[]; prices: RetrievedPriceEvidence[]; knowledge: RetrievedKnowledge[] };
 
 export type ExecutionStep = { label: string; detail?: string; status: "completed" | "empty" | "pending" };
-export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[] };
+export type TeaAnswer = { answer: string; recommendations: RetrievedProduct[]; recommendationSkus?: RetrievedSku[]; sources: RetrievedKnowledge[]; execution: ExecutionStep[] };
 export type ChatMessage = { id: string; role: "assistant" | "user"; content: string; answer?: TeaAnswer };

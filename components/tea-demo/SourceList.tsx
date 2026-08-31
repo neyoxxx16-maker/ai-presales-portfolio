@@ -1,5 +1,19 @@
 import type { RetrievedKnowledge } from "@/types/tea";
 
+const friendlyType: Record<RetrievedKnowledge["type"], string> = {
+  "品牌资料": "品牌资料",
+  "茶品资料": "茶品资料",
+  "SKU资料": "商品资料",
+  "冲泡指南": "冲泡指南",
+  "售后与边界": "售后说明",
+  "冲突处理": "使用边界",
+  "推荐规则": "选茶指南",
+};
+
+function friendlyTitle(title: string) {
+  return title.replace(/\s·\s(?:茶品资料|SKU资料)$/, "");
+}
+
 export function SourceList({ sources }: { sources: RetrievedKnowledge[] }) {
   if (!sources.length) return null;
   return (
@@ -8,7 +22,7 @@ export function SourceList({ sources }: { sources: RetrievedKnowledge[] }) {
       <div className="mt-3 space-y-2">
         {sources.map((source, index) => (
           <details key={source.id} className="group rounded-xl border border-black/5 bg-white px-4 py-3">
-            <summary className="cursor-pointer list-none text-sm text-neutral-700"><span className="mr-2 font-medium text-black">[{index + 1}]</span>{source.title}<span className="ml-2 text-xs text-neutral-400">{source.type} · {source.sourceIds.join(" / ")}</span></summary>
+            <summary className="cursor-pointer list-none text-sm text-neutral-700"><span className="mr-2 font-medium text-black">[{index + 1}]</span>{friendlyTitle(source.title)}<span className="ml-2 text-xs text-neutral-400">{friendlyType[source.type]}</span></summary>
             <p className="pt-3 text-sm leading-6 text-neutral-500">{source.excerpt}</p>
           </details>
         ))}

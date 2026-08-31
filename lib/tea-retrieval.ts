@@ -1,6 +1,6 @@
 import { teaKnowledge } from "@/data/tea/knowledge";
 import { teaPriceEvidence, teaProducts, teaSkus } from "@/data/tea/products";
-import type { IntentResult, PriceEvidence, RetrievalResult, TeaProduct, TeaSku } from "@/types/tea";
+import type { IntentResult, KnowledgeType, PriceEvidence, RetrievalResult, TeaIntent, TeaProduct, TeaSku } from "@/types/tea";
 
 function hasTerm(query: string, term: string) { return query.includes(term.toLowerCase()); }
 function matchTerms(query: string, terms: string[]) { return terms.filter((term) => hasTerm(query, term)); }
@@ -48,6 +48,19 @@ function priceMatch(price: PriceEvidence, query: string) {
   return { score, reasons };
 }
 
+const knowledgeTypesByIntent: Record<TeaIntent, KnowledgeType[]> = {
+  product_question: ["tea_type", "sku"],
+  product_fit: ["tea_type", "recommendation", "sku"],
+  gift_catalog: ["sku", "recommendation"],
+  product_browse: ["sku", "tea_type"],
+  product_recommendation: ["recommendation", "tea_type", "sku"],
+  price_query: ["sku"],
+  brewing_question: ["brewing"],
+  brand_question: ["brand_profile", "conflict_log"],
+  aftersales: ["aftersales", "conflict_log"],
+  unknown: ["conflict_log"],
+};
+
 /** 当前为本地规则检索；默认只读取 data/tea 中有 V1.1 资料来源支持的数据。 */
 export function retrieveTeaKnowledge(query: string, intent: IntentResult): RetrievalResult {
   const normalized = query.toLowerCase();
@@ -63,13 +76,14 @@ export function retrieveTeaKnowledge(query: string, intent: IntentResult): Retri
     const { score, reasons } = priceMatch(price, normalized);
     return { ...price, score, matchReasons: reasons };
   }).filter((item) => item.score >= 12).sort((a, b) => b.score - a.score).slice(0, 3);
-  const knowledge = teaKnowledge.map((document) => {
+  const allowedKnowledgeTypes = knowledgeTypesByIntent[intent.intent];
+  const knowledge = teaKnowledge.filter((document) => allowedKnowledgeTypes.includes(document.knowledgeType)).map((document) => {
     let score = 0;
     const reasons: string[] = [];
     const matches = matchTerms(normalized, document.keywords);
     if (matches.length) { score += Math.min(matches.length, 3) * 4; reasons.push(`命中知识关键词：${matches.slice(0, 2).join("、")}`); }
     if (intent.intent === "brewing_question" && document.knowledgeType === "brewing") { score += 12; reasons.push("匹配冲泡场景"); }
-    if (intent.intent === "gift_recommendation" && document.knowledgeType === "recommendation") { score += 8; reasons.push("匹配推荐场景"); }
+    if ((intent.intent === "gift_catalog" || intent.intent === "product_recommendation" || intent.intent === "product_fit") && document.knowledgeType === "recommendation") { score += 8; reasons.push("匹配推荐场景"); }
     if (document.knowledgeType === "sku" && skus.length) { score += 4; reasons.push("关联SKU资料"); }
     return { ...document, score, matchReasons: reasons };
   }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 4);

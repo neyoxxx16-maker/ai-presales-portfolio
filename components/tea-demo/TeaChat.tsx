@@ -45,7 +45,7 @@ export function TeaChat() {
             {messages.map((message) => message.role === "user" ? (
               <div key={message.id} className="ml-auto max-w-[88%] rounded-[20px] rounded-tr-sm bg-black px-4 py-3 text-sm leading-6 text-white">{message.content}</div>
             ) : (
-              <div key={message.id} className="max-w-[94%]"><div className="rounded-[20px] rounded-tl-sm bg-[#f7f8f9] px-4 py-4 text-sm leading-7 text-neutral-700">{message.content}</div>{message.answer && <div className="pl-1"><ProductRecommendation products={message.answer.recommendations} /><SourceList sources={message.answer.sources} /></div>}</div>
+              <div key={message.id} className="max-w-[94%]"><div className="rounded-[20px] rounded-tl-sm bg-[#f7f8f9] px-4 py-4 text-sm leading-7 text-neutral-700">{message.content}</div>{message.answer && <div className="pl-1"><ProductRecommendation products={message.answer.recommendations} skus={message.answer.recommendationSkus} /><SourceList sources={message.answer.sources} /></div>}</div>
             ))}
           </div>
           <div className="border-t border-black/5 bg-[#f7f8f9] p-4 sm:p-5">
