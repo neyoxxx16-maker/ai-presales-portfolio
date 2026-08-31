@@ -11,10 +11,10 @@ const projects = [
   },
   {
     no: "02",
-    title: "AI 电商内容生成与合规审核 Agent",
-    desc: "把商品资料录入、内容生成、参数校验、风险检测与导出串成一条可交互业务工作流。",
-    tags: ["Function Calling", "Structured Output", "Vibe Coding"],
-    href: "/demo/ecommerce-agent",
+    title: "AI 招投标与方案生成 Agent",
+    desc: "让 Agent 自动解析招标文件，调用企业知识与工具完成需求提取、资格匹配、偏离分析和技术响应建议。",
+    tags: ["Agent", "Tool Calling", "RAG", "OCR"],
+    href: "/demo/tender-agent",
   },
 ] as const;
 

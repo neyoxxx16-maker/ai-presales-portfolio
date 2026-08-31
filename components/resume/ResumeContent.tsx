@@ -51,17 +51,17 @@ const projects = [
   },
   {
     no: "02",
-    name: "AI 电商内容生成与合规审核 Agent",
-    role: "个人 AI 售前 POC · 工作流方案阶段",
-    desc: "把商品资料录入、内容生成、参数校验、风险检测、人工确认与导出串成 Step-by-Step Agent 工作台。",
+    name: "AI 招投标与方案生成 Agent",
+    role: "个人 AI 售前 POC · 多步骤 Agent Workflow",
+    desc: "面向售前招投标场景设计多步骤 Agent Workflow，实现招标文件解析、结构化需求提取、企业知识检索、资格匹配、偏离分析与技术响应草稿生成，并通过 Tool Calling 展示任务规划和执行过程。",
     contributions: [
-      "将电商内容生产拆成结构化业务流程，避免把第二个项目做成另一个聊天机器人。",
-      "规划 Structured Output 与 Function Calling，用工具校验价格、规格等商品参数一致性。",
-      "设计示例风险词检测与人工确认节点，并保留真实业务规则需持续维护的边界说明。",
+      "将招投标分析拆成文件解析、需求抽取、Planner、工具检索、规则匹配与人工复核，而非单次摘要。",
+      "以 Structured Planner + Tool Registry 让模型在可用时决定检索工具，并保留确定性回退与可审计执行记录。",
+      "用规则引擎计算资格状态、偏离风险与匹配度；所有演示企业资料与案例均明确标为 Synthetic Demo Data。",
     ],
-    tags: ["Function Calling", "Structured Output", "Workflow", "Vibe Coding"],
-    href: "/demo/ecommerce-agent",
-    action: "进入电商 Agent",
+    tags: ["Agent Planning", "Tool Calling", "RAG", "Document Parsing"],
+    href: "/demo/tender-agent",
+    action: "进入招投标 Agent",
   },
 ] as const;
 

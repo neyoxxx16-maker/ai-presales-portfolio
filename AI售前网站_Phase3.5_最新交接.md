@@ -1,6 +1,6 @@
-# AI 售前求职网站｜Phase 3.5 最新交接
+# Deprecated｜AI 售前求职网站 Phase 3.5 历史交接
 
-> 本文档基于当前仓库 `D:\zm\ai-presales-portfolio-phase2\ai-presales-portfolio` 的实际文件、Git 状态、测试与构建命令生成。不要用旧聊天记录覆盖本文档；后续工作先复核当前 Git 状态。
+> 本文记录的是茶叶导购阶段的历史状态，不再是“最新交接”或当前架构依据。Demo2 已重构为 AI 招投标与方案生成 Agent；当前可信架构、数据流和阶段规划请以 `docs/ARCHITECTURE_V2.md` 与 `README.md` 为准。
 
 ## 1. 当前项目目标
 
@@ -236,7 +236,7 @@ Tea Assistant 重点路径：
 
 ### 页面路由
 
-8. 实际 `app/` 中仅有 `/`、`/resume`、`/demo/tea-assistant`。Navbar 已存在 `/demo/ecommerce-agent`、`/solutions`、`/about` 链接，但对应 App Router 页面当前不存在，属于现有死链接风险（不属于本轮业务逻辑改动）。
+8. 本文所述页面路由是 Phase 3.5 历史状态；当前路由请以 `docs/ARCHITECTURE_V2.md` 为准。
 
 ## 11. 当前测试情况
 
