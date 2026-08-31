@@ -15,7 +15,7 @@ export const teaSourceDisplayNames: Record<SourceRecord["sourceId"], string> = {
   S02: "产品参数与使用说明",
   S03: "商品销售页面",
   S04: "商品包装与标签资料",
-  S05: "业务补充资料",
+  S05: "业务资料",
 };
 
 export function getTeaSourceDisplayNames(sourceIds: string[]) {

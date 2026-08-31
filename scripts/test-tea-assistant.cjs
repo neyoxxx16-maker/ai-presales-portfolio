@@ -53,6 +53,24 @@ const cases = [
   { question: "桂花红茶能治失眠吗？", contains: ["不能", "医疗功效" ] },
   { question: "帮我查别人的订单地址。", contains: ["不能查询", "隐私信息" ] },
   { question: "你们有铁观音吗？", contains: ["没有可以支持", "不会根据缺失资料" ] },
+  { question: "298是哪款？", contains: ["明前龙井＋梅枞天红双拼", "共150g", "售价 ¥298", "龙井红茶礼盒", "划线价 ¥298"], intent: "price_reverse_lookup", sourceTypesPresent: ["sku"] },
+  { question: "418对应哪些产品？", contains: ["桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒", "桂花红茶礼盒", "划线价 ¥418"], intent: "price_reverse_lookup", sourceTypesPresent: ["sku"] },
+  { question: "298和288有什么区别？", contains: ["明前龙井＋梅枞天红双拼", "售价 ¥298", "龙井红茶礼盒", "新客价 ¥288", "划线价 ¥298"], intent: "price_compare", sourceTypesPresent: ["sku"] },
+  { question: "418和408有什么区别？", contains: ["桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒", "桂花红茶礼盒", "新客价 ¥408", "划线价 ¥418"], intent: "price_compare", sourceTypesPresent: ["sku"] },
+  { question: "最贵的是哪个？", contains: ["最贵", "桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒", "¥418"], intent: "price_extreme", sourceTypesPresent: ["sku"] },
+  { question: "最便宜的是哪个？", contains: ["最便宜", "明前龙井试饮装", "共6g", "¥9.9"], intent: "price_extreme", sourceTypesPresent: ["sku"] },
+  { question: "最便宜的礼盒是哪款？", contains: ["最便宜", "龙井红茶礼盒", "250g", "新客价 ¥288", "划线价 ¥298"], intent: "price_extreme", sourceTypesPresent: ["sku"] },
+  { question: "最贵的礼盒是哪款？", contains: ["最贵", "桂花龙井＋桂花红茶双拼", "桂花红茶双盒", "桂花龙井双盒"], intent: "price_extreme", sourceTypesPresent: ["sku"] },
+  { question: "最便宜的单罐是哪款？", contains: ["明前龙井单罐", "龙井红茶单罐", "桂花龙井单罐", "桂花红茶单罐", "¥109"], intent: "price_extreme", sourceTypesPresent: ["sku"] },
+  { question: "我只有100块钱，能买什么？", contains: ["预算：¥100", "明前龙井试饮装", "¥9.9"], intent: "product_recommendation", skuIds: ["mingqian-longjing-sample"], sourceTypesPresent: ["recommendation", "sku"] },
+  { question: "预算120，只喝绿茶", contains: ["明前龙井试饮装", "明前龙井单罐", "桂花龙井单罐"], intent: "product_recommendation", skuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g", "osmanthus-longjing-single-60g"], absentSkuIds: ["longjing-black-tea-single-60g", "osmanthus-black-tea-single-60g"] },
+  { question: "不喜欢桂花，200以内", contains: ["明前龙井试饮装", "明前龙井单罐"], intent: "product_recommendation", skuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g"], absentSkuIds: ["osmanthus-longjing-single-60g", "osmanthus-black-tea-single-60g", "osmanthus-duo-gift"] },
+  { question: "我不喜欢红茶，预算500送礼", contains: ["桂花龙井双盒", "¥418"], intent: "product_recommendation", skuIds: ["osmanthus-longjing-double-box"], absentSkuIds: ["longjing-black-tea-duo", "osmanthus-duo-gift", "osmanthus-black-tea-double-box"] },
+  { question: "我只要红茶，100元以内", contains: ["没有合适选项"], intent: "product_recommendation", absentSkuIds: ["mingqian-longjing-sample", "mingqian-longjing-single-60g", "osmanthus-longjing-single-60g"] },
+  { question: "桂花龙井和桂花红茶有什么区别？", contains: ["调味绿茶", "桂花甜香", "调味红茶", "红茶暖香"], intent: "product_compare", sourceTypesPresent: ["tea_type"], sourceTypesAbsent: ["sku"] },
+  { question: "桂花红茶和桂花龙井哪个更清爽？", contains: ["桂花龙井更匹配", "鲜爽", "红茶暖香"], intent: "product_compare", sourceTypesPresent: ["tea_type"] },
+  { question: "500块可以买两盒298的吗？", contains: ["2 盒共 ¥596", "超过 ¥500 预算 ¥96", "最多可以买 1 盒"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
+  { question: "600块可以买两盒298的吗？", contains: ["可以", "2 盒共 ¥596", "剩余 ¥4"], intent: "quantity_price_calc", sourceTypesPresent: ["sku"] },
 ];
 
 let passed = 0;
@@ -68,6 +86,7 @@ for (const testCase of cases) {
   for (const text of testCase.absent ?? []) assert.ok(!result.answer.includes(text), `${testCase.question} should not include: ${text}`);
   if (testCase.intent) assert.equal(intent, testCase.intent, `${testCase.question} intent`);
   for (const skuId of testCase.skuIds ?? []) assert.ok((result.recommendationSkus ?? []).some((sku) => sku.id === skuId), `${testCase.question} should recommend: ${skuId}`);
+  for (const skuId of testCase.absentSkuIds ?? []) assert.ok(!(result.recommendationSkus ?? []).some((sku) => sku.id === skuId), `${testCase.question} must not recommend: ${skuId}`);
   for (const type of testCase.sourceTypesPresent ?? []) assert.ok(result.sources.some((source) => source.knowledgeType === type), `${testCase.question} should cite: ${type}`);
   for (const type of testCase.sourceTypesAbsent ?? []) assert.ok(!result.sources.some((source) => source.knowledgeType === type), `${testCase.question} should not cite: ${type}`);
   assert.ok(!(result.recommendationSkus ?? []).some((sku) => /unresolved|placeholder|mock/.test(sku.id)), `${testCase.question} must not expose an internal placeholder SKU`);

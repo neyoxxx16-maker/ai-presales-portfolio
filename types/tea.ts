@@ -89,8 +89,26 @@ export type KnowledgeDocument = {
   dataSource: "verified-project-source";
 };
 
-export type TeaIntent = "product_recommendation" | "product_question" | "product_fit" | "gift_catalog" | "product_browse" | "price_query" | "brewing_question" | "brand_question" | "aftersales" | "unknown";
-export type TeaEntities = { budget?: number; scene?: string; audience?: string; preference?: string; teaType?: string; packaging?: string; productIds?: string[] };
+export type TeaIntent = "product_recommendation" | "product_question" | "product_fit" | "product_compare" | "gift_catalog" | "product_browse" | "price_query" | "price_reverse_lookup" | "price_compare" | "price_extreme" | "quantity_price_calc" | "brewing_question" | "brand_question" | "aftersales" | "unknown";
+export type PriceScope = "all" | "gift_box" | "single_can" | "trial";
+export type TeaEntities = {
+  budget?: number;
+  scene?: string;
+  audience?: string;
+  preference?: string;
+  teaType?: string;
+  packaging?: string;
+  productIds?: string[];
+  requiredTeaTypes?: TeaCategory[];
+  excludedTeaTypes?: TeaCategory[];
+  excludedFlavors?: string[];
+  excludedIngredients?: string[];
+  excludedProductIds?: string[];
+  priceAmounts?: number[];
+  priceScope?: PriceScope;
+  quantity?: number;
+  unitPrice?: number;
+};
 export type IntentResult = { intent: TeaIntent; entities: TeaEntities };
 
 export type RetrievedProduct = TeaProduct & { relatedSkus: TeaSku[]; score: number; matchReasons: string[] };
