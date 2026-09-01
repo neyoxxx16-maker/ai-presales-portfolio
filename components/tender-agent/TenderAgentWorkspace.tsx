@@ -63,12 +63,18 @@ const pendingValue = (value?: string) =>
   value && value !== "待确认" && value !== "资料未提供" ? value : "待确认";
 const hasProjectMetadata = (projectNumber?: string, purchaser?: string) =>
   Boolean(projectNumber?.trim() || purchaser?.trim());
-function projectDetails(result?: TenderAgentResult, files: ParsedBidDocument[] = []) {
+const cleanProjectNameFallback = (value?: string) =>
+  value?.trim().replace(/\.[^./\\]+$/u, "") || "未命名招标项目";
+function projectDetails(
+  result?: TenderAgentResult,
+  files: ParsedBidDocument[] = [],
+  fallbackProjectName?: string,
+) {
   const info = result?.document.projectInfo;
   return {
     projectName: pendingValue(info?.projectName) !== "待确认"
       ? pendingValue(info?.projectName)
-      : files[0]?.fileName || "未命名招标项目",
+      : cleanProjectNameFallback(files[0]?.fileName || fallbackProjectName),
     projectNumber: pendingValue(info?.projectCode),
     purchaser: pendingValue(info?.purchaser),
   };
@@ -225,6 +231,14 @@ export function TenderAgentWorkspace() {
   useEffect(() => {
     const activeProjectId = getActiveTenderProjectId();
     const restored = activeProjectId ? getTenderProjectSession(activeProjectId) : undefined;
+    const projects = listTenderProjectSessions();
+    projects.forEach((project) => {
+      const session = getTenderProjectSession(project.projectId);
+      if (!session) return;
+      const projectName = projectDetails(session.result, session.files, session.projectName).projectName;
+      if (session.projectName !== projectName)
+        saveTenderProjectSession({ ...session, projectName });
+    });
     setHistoryProjects(listTenderProjectSessions());
     if (restored) restoreProjectSession(restored);
     setHistoryHydrated(true);
@@ -276,7 +290,7 @@ export function TenderAgentWorkspace() {
     if (!historyHydrated || (!result && !storedFiles.length && !conversation.length)) return;
     const previous = getTenderProjectSession(analysisSessionId);
     const now = new Date().toISOString();
-    const details = projectDetails(result, storedFiles);
+    const details = projectDetails(result, storedFiles, previous?.projectName);
     const status: ProjectSessionStatus = error
       ? "failed"
       : running || askingAgent
