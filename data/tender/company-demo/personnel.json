@@ -1,0 +1,10 @@
+[
+  {"id":"P001","name":"张云辰（Demo）","role":"项目经理","experienceYears":8,"certifications":["PMP"],"skills":["项目管理","交付统筹"],"status":"partial","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["项目经理","PMP","张云辰"]},
+  {"id":"P002","name":"李承宇（Demo）","role":"解决方案架构师","experienceYears":7,"certifications":["信息系统项目管理师","云计算架构认证"],"skills":["方案架构","私有化部署","SSO"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["解决方案架构师","信息系统项目管理师","云计算"]},
+  {"id":"P003","name":"陈屿（Demo）","role":"大模型算法负责人","experienceYears":6,"certifications":[],"skills":["LLM","RAG","Embedding","模型部署","推理优化"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["大模型","LLM","RAG","Embedding"]},
+  {"id":"P004","name":"周知远（Demo）","role":"AI算法工程师","experienceYears":5,"certifications":[],"skills":["Agent","检索排序","文档智能"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["AI算法","Agent","文档智能"]},
+  {"id":"P005","name":"吴启航（Demo）","role":"后端工程师","experienceYears":6,"certifications":[],"skills":["API网关","RBAC","系统集成"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["后端","RBAC","系统集成"]},
+  {"id":"P006","name":"赵安然（Demo）","role":"实施工程师","experienceYears":5,"certifications":[],"skills":["部署联调","数据治理","试运行"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["实施","部署联调","数据治理"]},
+  {"id":"P007","name":"孙维（Demo）","role":"运维工程师","experienceYears":5,"certifications":[],"skills":["Kubernetes","监控","备份恢复"],"status":"valid","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["运维","Kubernetes","监控"]},
+  {"id":"P008","name":"何清（Demo）","role":"安全工程师兼培训顾问","experienceYears":4,"certifications":["信息安全服务认证（Demo）"],"skills":["安全审计","管理员培训","用户培训"],"status":"partial","synthetic":true,"evidence_source":"documents/personnel-evidence.md","keywords":["安全工程师","培训顾问","安全审计","培训"]}
+]

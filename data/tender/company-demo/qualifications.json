@@ -1,0 +1,12 @@
+[
+  {"id":"Q001","name":"ISO9001质量管理体系认证","status":"valid","validFrom":"2025-01-01","validTo":"2027-12-31","scope":"软件研发、人工智能平台实施与技术服务","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["ISO9001","质量管理体系","质量管理","软件研发"]},
+  {"id":"Q002","name":"ISO27001信息安全管理体系认证","status":"valid","validFrom":"2025-03-01","validTo":"2028-02-28","scope":"企业软件、数据安全与人工智能平台服务","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["ISO27001","信息安全管理体系","信息安全","数据安全"]},
+  {"id":"Q003","name":"ISO20000信息技术服务管理体系认证","status":"valid","validFrom":"2025-02-01","validTo":"2028-01-31","scope":"信息技术服务、平台运维与技术支持","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["ISO20000","信息技术服务管理体系","IT服务"]},
+  {"id":"Q004","name":"CMMI Level 3","status":"valid","validFrom":"2024-06-01","validTo":"2027-05-31","scope":"软件研发过程能力","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["CMMI","CMMI3","软件成熟度"]},
+  {"id":"Q005","name":"高新技术企业","status":"valid","validFrom":"2024-01-01","validTo":"2026-12-31","scope":"人工智能与软件技术研发","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["高新技术企业","高企"]},
+  {"id":"Q006","name":"企业级RAG知识库平台 V2.0 软件著作权","status":"valid","validFrom":"2024-04-10","validTo":"","scope":"企业知识库与检索增强生成软件","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["软件著作权","软著","RAG","知识库","产品证明"]},
+  {"id":"Q007","name":"AI Agent Orchestration Platform V1.0 软件著作权","status":"valid","validFrom":"2024-09-15","validTo":"","scope":"智能体编排与任务协同软件","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["软件著作权","软著","AI Agent","智能体","产品证明"]},
+  {"id":"Q008","name":"ISO22301业务连续性管理体系认证","status":"expired","validFrom":"2022-01-01","validTo":"2024-12-31","scope":"业务连续性管理","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["ISO22301","业务连续性"]},
+  {"id":"Q009","name":"ITSS信息技术服务标准符合性证书","status":"missing","validFrom":"","validTo":"","scope":"","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["ITSS","信息技术服务标准"]},
+  {"id":"Q010","name":"涉密信息系统集成资质","status":"missing","validFrom":"","validTo":"","scope":"","synthetic":true,"evidence_source":"documents/qualification-evidence.md","keywords":["涉密","涉密信息系统集成"]}
+]

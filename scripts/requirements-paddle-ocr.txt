@@ -1,0 +1,5 @@
+# Local CPU OCR runtime for scripts/paddle-ocr.py (Windows development default)
+paddlepaddle==3.0.0
+paddleocr==2.9.1
+PyMuPDF>=1.24
+Pillow>=10

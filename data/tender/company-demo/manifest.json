@@ -1,0 +1,8 @@
+{
+  "id": "yunshu-intelligence-demo",
+  "label": "示例供应商资料",
+  "synthetic": true,
+  "demo_only": true,
+  "notice": "仅用于作品集功能演示，不对应真实企业、人员、证书或客户。",
+  "sources": ["company-profile.json", "qualifications.json", "personnel.json", "cases.json", "capabilities.json", "delivery.json", "after-sales.json"]
+}

@@ -7,7 +7,7 @@
 | 页面 | 当前能力 |
 | --- | --- |
 | `/demo/tea-assistant` | 一叶春山 AI 导购知识库 POC；独立茶叶资料空间和 RAG 链路。 |
-| `/demo/tender-agent` | 招投标分析工作台；Sample / TXT / Markdown 输入、需求提取、Planner、工具调用、偏离分析、技术响应建议与人工复核。 |
+| `/demo/tender-agent` | 招投标分析工作台；Sample 与 PDF / DOCX / TXT / Markdown 输入、真实文本解析、需求提取、Planner、工具调用、偏离分析、技术响应建议与人工复核。 |
 | `/resume` 与首页 | 同步展示两个真实可进入的项目入口。 |
 
 ## 2. Tender Agent 数据流

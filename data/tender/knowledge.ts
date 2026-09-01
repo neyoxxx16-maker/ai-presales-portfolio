@@ -1,16 +1,36 @@
-import type { KnowledgeRecord } from "@/types/tender-agent";
+import manifest from "@/data/tender/company-demo/manifest.json";
+import profile from "@/data/tender/company-demo/company-profile.json";
+import qualifications from "@/data/tender/company-demo/qualifications.json";
+import personnel from "@/data/tender/company-demo/personnel.json";
+import cases from "@/data/tender/company-demo/cases.json";
+import capabilities from "@/data/tender/company-demo/capabilities.json";
+import delivery from "@/data/tender/company-demo/delivery.json";
+import afterSales from "@/data/tender/company-demo/after-sales.json";
+import type { EvidenceStatus, KnowledgeRecord } from "@/types/tender-agent";
 
-const source = (id: string, title: string, excerpt: string, location: string): KnowledgeRecord["source"] => ({ id, title, excerpt, location, category: "演示企业资料" });
+type Raw = Record<string, unknown>;
+const root = "data/tender/company-demo";
+const text = (value: unknown) => Array.isArray(value) ? value.join("、") : String(value ?? "");
+const source = (id: string, title: string, content: string, sourceFile: string): KnowledgeRecord["source"] => ({ id, title: `${id} · ${title}`, excerpt: content.slice(0, 100), location: `${root}/${sourceFile}`, category: "演示企业资料" });
+function record(category: KnowledgeRecord["category"], item: Raw, content: string, sourceFile: string): KnowledgeRecord {
+  const id = String(item.id); const title = String(item.name);
+  return { evidenceId: id, id, category, title, content, tags: (item.keywords as string[] | undefined) ?? [], sourceFile, status: (item.status as EvidenceStatus | undefined) ?? "valid", validFrom: String(item.validFrom || "") || undefined, validTo: String(item.validTo || "") || undefined, synthetic: true, source: source(id, title, content, sourceFile) };
+}
+
+const qualificationRecords = (qualifications as Raw[]).map((item) => record("qualification", item, `${item.name}；状态：${item.status}；有效期：${item.validFrom || "未提供"} 至 ${item.validTo || "长期/未提供"}；适用范围：${item.scope || "未提供"}。`, "qualifications.json"));
+const personnelRecords = (personnel as Raw[]).map((item) => record("personnel", item, `${item.name}，${item.role}，${item.experienceYears}年经验；证书：${text(item.certifications) || "未提供"}；能力：${text(item.skills)}。`, "personnel.json"));
+const caseRecords = (cases as Raw[]).map((item) => record("case", item, `${item.name}；行业：${item.industry}；规模：${item.amount}；内容：${text(item.content)}；验收：${item.acceptance}；同类判断：${item.similarity}。`, "cases.json"));
+const capabilityRecords = (capabilities as Raw[]).map((item) => record("product", item, `${item.description} 状态：${item.status}。`, "capabilities.json"));
 
 export const tenderKnowledge: KnowledgeRecord[] = [
-  { id: "Q-ISO9001", category: "qualification", title: "ISO9001 质量管理体系认证（演示）", content: "星云智能科技（演示企业）持有有效 ISO9001 质量管理体系认证，可用于一般项目资格核验。", tags: ["ISO9001", "质量管理", "资质"], source: source("Q-ISO9001", "企业资质清单（Synthetic Demo Data）", "ISO9001 质量管理体系认证：有效。", "qualifications/iso9001.md") },
-  { id: "Q-ISO27001", category: "qualification", title: "ISO27001 信息安全管理体系认证（演示）", content: "星云智能科技（演示企业）持有 ISO27001 信息安全管理体系认证。", tags: ["ISO27001", "信息安全", "资质"], source: source("Q-ISO27001", "企业资质清单（Synthetic Demo Data）", "ISO27001 信息安全管理体系认证：有效。", "qualifications/iso27001.md") },
-  { id: "Q-YEAR", category: "qualification", title: "企业成立年限说明（演示）", content: "演示企业成立于 2018 年，满足成立三年以上的资格条件。", tags: ["成立年限", "2018", "资质"], source: source("Q-YEAR", "企业基本信息（Synthetic Demo Data）", "成立于 2018 年。", "company-profile/basic.md") },
-  { id: "Q-SOFTCOPY", category: "qualification", title: "软件著作权清单（演示）", content: "演示企业拥有企业知识库平台、智能问答与工作流编排相关的软件著作权登记材料。", tags: ["软件著作权", "知识库", "资质"], source: source("Q-SOFTCOPY", "企业资质清单（Synthetic Demo Data）", "软件著作权：企业知识库平台、智能问答相关。", "qualifications/software-copyright.md") },
-  { id: "P-RAG", category: "product", title: "企业知识库与 RAG 能力（演示）", content: "支持文档解析、知识分段、检索增强生成、来源引用与答案不足时的人工转交。", tags: ["知识库", "RAG", "文档解析", "来源引用"], source: source("P-RAG", "产品能力白皮书（Synthetic Demo Data）", "支持企业知识库、RAG、文档解析与来源引用。", "products/knowledge-base.md") },
-  { id: "P-PRIVATE", category: "product", title: "私有化部署与集成能力（演示）", content: "支持私有化部署、SSO、角色权限控制、日志审计及多模型接入。", tags: ["私有化部署", "SSO", "权限", "日志审计", "多模型"], source: source("P-PRIVATE", "产品能力白皮书（Synthetic Demo Data）", "支持私有化部署、SSO、RBAC 与日志审计。", "products/private-deployment.md") },
-  { id: "P-DB", category: "product", title: "国产数据库兼容说明（演示）", content: "已完成部分国产数据库适配验证；特定版本、性能与灾备方案需项目技术确认。", tags: ["国产数据库", "兼容", "部分支持"], source: source("P-DB", "兼容性说明（Synthetic Demo Data）", "国产数据库：部分版本完成适配，需项目确认。", "products/database-compatibility.md") },
-  { id: "C-MANU", category: "case", title: "制造行业知识库 POC（演示）", content: "制造行业内部知识助手 POC，覆盖设备手册检索、来源引用和人工复核流程。", tags: ["制造", "知识库", "POC"], source: source("C-MANU", "历史案例库（Synthetic Demo Data）", "制造行业知识库 POC，非生产项目与非真实客户。", "cases/manufacturing-kb.md") },
-  { id: "C-RETAIL", category: "case", title: "零售智能客服 POC（演示）", content: "零售场景智能客服 POC，覆盖商品知识检索和风险问题转人工。", tags: ["零售", "客服", "POC"], source: source("C-RETAIL", "历史案例库（Synthetic Demo Data）", "零售智能客服 POC，非生产项目与非真实客户。", "cases/retail-service.md") },
-  { id: "D-DELIVERY", category: "delivery", title: "交付与实施能力说明（演示）", content: "可提供需求澄清、试点验证、部署联调、培训交接与验收支持；具体周期以项目范围评估为准。", tags: ["交付", "培训", "实施", "验收"], source: source("D-DELIVERY", "交付能力说明（Synthetic Demo Data）", "可提供 POC、部署联调、培训交接与验收支持。", "company-profile/delivery.md") },
+  record("company", profile as Raw, `${profile.name}，成立于 ${profile.establishedAt}；主营：${profile.focus.join("、")}。`, "company-profile.json"),
+  ...qualificationRecords, ...personnelRecords, ...caseRecords, ...capabilityRecords,
+  record("delivery", delivery as Raw, `覆盖阶段：${delivery.stages.join("、")}；治理：${delivery.governance.join("、")}。`, "delivery.json"),
+  record("after-sales", afterSales as Raw, `${afterSales.support}；服务：${afterSales.services.join("、")}。`, "after-sales.json"),
 ];
+
+export const companyLibraryOverview = {
+  label: manifest.label, notice: manifest.notice, company: profile.name,
+  sections: [["公司资料", 1], ["企业资质", qualificationRecords.filter((item) => item.status !== "missing").length], ["项目成员", personnelRecords.length], ["历史案例", caseRecords.length], ["产品能力", capabilityRecords.length], ["实施交付", 1], ["售后服务", 1]] as Array<[string, number]>,
+};
+export function recordsByCategory(category: KnowledgeRecord["category"]) { return tenderKnowledge.filter((item) => item.category === category); }

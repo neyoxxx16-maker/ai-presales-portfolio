@@ -1,35 +1,1161 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, CircleAlert, Database, Download, FileSearch, FileText, LoaderCircle, Search, ShieldCheck, Sparkles, Upload, Workflow } from "lucide-react";
-import type { MatchStatus, TenderAgentResult, TenderAgentRequest, TenderSource } from "@/types/tender-agent";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  Download,
+  FileSearch,
+  FileText,
+  LoaderCircle,
+  ShieldCheck,
+  Sparkles,
+  Workflow,
+} from "lucide-react";
+import { TenderFileDropzone } from "@/components/tender-agent/TenderFileDropzone";
+import { TenderCompanyLibraryManager } from "@/components/tender-agent/TenderCompanyLibraryManager";
+import { companyLibraryOverview } from "@/data/tender/knowledge";
+import type {
+  CompanyWorkspaceMode,
+  MatchStatus,
+  RequirementMatch,
+  RiskLevel,
+  TenderAgentResult,
+  TenderSource,
+} from "@/types/tender-agent";
 
-const statusStyle: Record<MatchStatus, string> = { PASS: "bg-emerald-100 text-emerald-800", PARTIAL: "bg-amber-100 text-amber-900", MISSING: "bg-red-100 text-red-800", UNKNOWN: "bg-neutral-200 text-neutral-700" };
-const statusLabel: Record<MatchStatus, string> = { PASS: "符合", PARTIAL: "部分符合", MISSING: "缺失", UNKNOWN: "资料不足" };
-const riskStyle = { HIGH: "bg-red-100 text-red-800", MEDIUM: "bg-amber-100 text-amber-900", LOW: "bg-emerald-100 text-emerald-800" };
+type Tab =
+  | "overview"
+  | "qualification"
+  | "technical"
+  | "scoring"
+  | "response"
+  | "library";
+type ConversationMessage = { role: "user" | "assistant"; content: string };
+const statusLabel: Record<MatchStatus, string> = {
+  PASS: "符合",
+  PENDING: "待确认",
+  MISSING_EVIDENCE: "资料缺失",
+  FAIL: "明确不符合",
+};
+const statusStyle: Record<MatchStatus, string> = {
+  PASS: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  PENDING: "border-amber-200 bg-amber-50 text-amber-900",
+  MISSING_EVIDENCE: "border-orange-200 bg-orange-50 text-orange-900",
+  FAIL: "border-red-200 bg-red-50 text-red-800",
+};
+const riskLabel: Record<RiskLevel, string> = {
+  LOW: "低风险",
+  MEDIUM: "中风险",
+  HIGH: "高风险",
+};
+const riskStyle: Record<RiskLevel, string> = {
+  LOW: "bg-emerald-100 text-emerald-800",
+  MEDIUM: "bg-amber-100 text-amber-900",
+  HIGH: "bg-red-100 text-red-800",
+};
+const badge =
+  "inline-flex h-7 min-w-[5.5rem] items-center justify-center whitespace-nowrap rounded-full border px-3 text-[11px] font-medium leading-none";
 
-function SourceChips({ sources }: { sources: TenderSource[] }) { return <div className="mt-3 flex flex-wrap gap-1.5">{sources.length ? sources.map((source) => <span title={source.excerpt} key={`${source.id}-${source.location}`} className="rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] text-neutral-500">来源：{source.title} · {source.location}</span>) : <span className="text-[11px] text-neutral-400">暂无可核验证据</span>}</div>; }
-
-export function TenderAgentWorkspace() {
-  const [result, setResult] = useState<TenderAgentResult>(); const [error, setError] = useState(""); const [running, setRunning] = useState(false); const [file, setFile] = useState<File>(); const [reviewed, setReviewed] = useState(false);
-  async function run(input: TenderAgentRequest) { if (running) return; setRunning(true); setError(""); setReviewed(false); try { const response = await fetch("/api/tender-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }); const data = await response.json() as TenderAgentResult & { message?: string }; if (!response.ok) throw new Error(data.message || "分析未完成。"); setResult(data); } catch (err) { setError(err instanceof Error ? err.message : "分析未完成。"); } finally { setRunning(false); } }
-  async function upload() { if (!file) { setError("请先选择文件，或直接运行示例招标文件。"); return; } if (!/\.(txt|md)$/i.test(file.name)) { setError("当前真实解析支持 TXT / Markdown；PDF、Word 已预留 OCR 接口但尚未接入解析服务，请先导出为文本，或使用示例文件。 "); return; } await run({ mode: "upload", fileName: file.name, content: await file.text() }); }
-  function exportResult() { if (!result) return; const text = `# 招投标分析建议\n\n## 项目\n${result.document.projectInfo.projectName}\n\n## 匹配度\n${result.matchScore.value}%\n${result.matchScore.formula}\n\n## 偏离分析\n${result.matches.map((item) => `- [${statusLabel[item.status]}] ${item.requirement}\n  - 我方能力：${item.ourCapability}\n  - 建议：${item.suggestedAction}`).join("\n")}\n\n## 人工确认\n${result.notice}`; const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "招投标分析建议.md"; link.click(); URL.revokeObjectURL(url); }
-  return <section className="bg-[#f7f8f9] py-14 lg:py-20"><div className="mx-auto max-w-7xl px-5 lg:px-8">
-    <div className="max-w-4xl"><p className="section-kicker">AI Tender & Solution Agent · Phase 5</p><h1 className="mt-4 text-4xl font-medium tracking-[-0.05em] sm:text-6xl">AI 招投标与方案生成 Agent</h1><p className="mt-5 max-w-3xl text-sm leading-7 text-neutral-500">从招标文件出发，Agent 规划并调用企业资质、产品能力与案例检索工具，输出可追溯的需求拆解、资格检查、偏离分析和技术响应建议。这里展示的是 POC 工作流，所有企业资料均为 Synthetic Demo Data。</p></div>
-    <div className="mt-10 grid gap-5 xl:grid-cols-[330px_minmax(0,1fr)]">
-      <aside className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><div className="flex items-center gap-2"><FileSearch size={16} /><h2 className="font-medium">招标材料输入</h2></div><p className="mt-3 text-xs leading-6 text-neutral-500">使用示例文件可完整体验闭环；上传文本会在服务端解析。文件内容仅作待分析资料，不会被当成系统指令。</p><button onClick={() => run({ mode: "sample" })} disabled={running} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-medium disabled:opacity-60"><Sparkles size={16} />运行 Sample 招标文件</button><div className="my-5 flex items-center gap-3 text-[11px] text-neutral-400"><span className="h-px flex-1 bg-black/10" />或上传材料<span className="h-px flex-1 bg-black/10" /></div><label className="block cursor-pointer rounded-2xl border border-dashed border-black/15 bg-[#f7f8f9] p-4 text-center text-xs text-neutral-500"><Upload className="mx-auto mb-2" size={18} /><span className="block font-medium text-neutral-700">{file ? file.name : "选择 TXT / Markdown"}</span><span className="mt-1 block">PDF / Word 已预留 OCR 接口</span><input className="sr-only" type="file" accept=".txt,.md,.pdf,.doc,.docx,text/plain,text/markdown" onChange={(event) => setFile(event.target.files?.[0])} /></label><button onClick={upload} disabled={running || !file} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-40"><Upload size={15} />解析上传文件</button><div className="mt-6 rounded-2xl bg-black p-4 text-xs leading-6 text-white/65"><p className="font-medium text-white">当前边界</p><p className="mt-1">TXT / Markdown：真实解析。PDF / Word / 扫描件：OCR Tool Interface 已展示，当前未配置解析服务，使用 Sample fallback 验证流程。</p></div></aside>
-      <div className="space-y-5"><section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><div className="flex items-start justify-between gap-5"><div><p className="text-sm font-medium">Agent 执行过程</p><p className="mt-1 text-xs text-neutral-500">仅展示工具输入、结果、来源与状态；不展示内部推理过程。</p></div>{result && <span className="rounded-full bg-[#edf7d5] px-3 py-1.5 text-xs font-medium">{result.planner.mode === "deepseek-structured" ? "DeepSeek Structured Planner" : "Rule Planner Fallback"}</span>}</div><div className="mt-6 grid gap-3 md:grid-cols-2">{(result?.execution ?? ["解析招标文件", "提取结构化需求", "检索企业资料", "逐条要求匹配", "生成技术响应建议"]).map((item, index) => typeof item === "string" ? <div key={item} className="rounded-2xl border border-dashed border-black/10 p-4 text-neutral-400"><span className="text-[11px] font-medium">{String(index + 1).padStart(2, "0")}</span><p className="mt-3 text-sm">{item}</p></div> : <details key={item.id} className="group rounded-2xl border border-black/10 bg-[#f7f8f9] p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3"><div><span className="text-[11px] font-medium text-neutral-400">{String(index + 1).padStart(2, "0")}</span><p className="mt-1 text-sm font-medium">{item.label}</p></div><ChevronDown className="transition group-open:rotate-180" size={16} /></summary><p className="mt-3 text-xs leading-6 text-neutral-600">{item.resultSummary}</p><div className="mt-3 grid gap-2 text-[11px] text-neutral-500"><p>作用：{item.purpose}</p><p>输入：{item.inputSummary}</p><p>状态：{item.status === "not_configured" ? "未配置" : "完成"} · {item.durationMs} ms</p></div><SourceChips sources={item.sources} /></details>)}</div>{running && <p className="mt-5 flex items-center gap-2 rounded-xl bg-[#f7f8f9] px-4 py-3 text-sm text-neutral-600"><LoaderCircle className="animate-spin" size={16} />正在由 Planner 选择并执行所需工具…</p>}</section>
-      {error && <div role="alert" className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><AlertTriangle className="mt-0.5 shrink-0" size={18} />{error}</div>}
-      {result ? <ResultView result={result} reviewed={reviewed} onReview={() => setReviewed(true)} onExport={exportResult} /> : <section className="flex min-h-[350px] flex-col items-center justify-center rounded-[28px] border border-dashed border-black/10 bg-white p-8 text-center"><Workflow size={34} className="text-neutral-300" /><h2 className="mt-4 text-lg font-medium">等待一份待分析的招标文件</h2><p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">运行示例后，这里将展开需求结构、资格匹配、偏离表、风险与带来源的技术响应建议。</p></section>}</div>
-    </div>
-    <PortfolioNarrative />
-  </div></section>;
+function StatusBadge({ status }: { status: MatchStatus }) {
+  return (
+    <span className={`${badge} ${statusStyle[status]}`}>
+      {statusLabel[status]}
+    </span>
+  );
+}
+function RiskBadge({ risk }: { risk: RiskLevel }) {
+  return (
+    <span
+      className={`inline-flex h-7 min-w-[4.5rem] items-center justify-center whitespace-nowrap rounded-full px-3 text-[11px] font-medium leading-none ${riskStyle[risk]}`}
+    >
+      {riskLabel[risk]}
+    </span>
+  );
+}
+function Evidence({ sources }: { sources: TenderSource[] }) {
+  return (
+    <details className="mt-3 text-xs">
+      <summary className="cursor-pointer text-neutral-500">
+        查看证据（{sources.length}）
+      </summary>
+      <div className="mt-2 space-y-2">
+        {sources.length ? (
+          sources.map((source) => (
+            <div
+              key={`${source.id}-${source.location}`}
+              className="rounded-xl border border-black/5 bg-white px-3 py-2"
+            >
+              <p className="font-medium text-neutral-700">{source.title}</p>
+              <p className="mt-1 text-[11px] leading-5 text-neutral-500">
+                {source.excerpt}
+              </p>
+              <p className="mt-1 text-[10px] text-neutral-400">
+                来源类型：{source.category} · Evidence ID：{source.id}
+                {source.documentName ? ` · ${source.documentName}` : ""}
+                {source.page ? ` · 第 ${source.page} 页` : ""}
+                {source.chunkId ? ` · 片段 ${source.chunkId}` : ""}
+                {!source.documentName && source.category === "招标文件" ? ` · ${source.location}` : ""}
+              </p>
+            </div>
+          ))
+        ) : (
+          <p className="text-neutral-400">暂无有效证据</p>
+        )}
+      </div>
+    </details>
+  );
+}
+function InlineMarkdown({ value }: { value: string }) {
+  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={index}>{part.slice(2, -2)}</strong>
+        ) : part.startsWith("`") && part.endsWith("`") ? (
+          <code key={index} className="rounded bg-black/5 px-1 py-0.5">{part.slice(1, -1)}</code>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+/** Deliberately renders text nodes only; model output is never injected as HTML. */
+function MarkdownText({ value }: { value: string }) {
+  const blocks: ReactNode[] = [];
+  const lines = value.replace(/\r/g, "").split("\n");
+  let list: Array<{ ordered: boolean; content: string }> = [];
+  const flush = () => {
+    if (!list.length) return;
+    const ordered = list[0].ordered;
+    const Tag = ordered ? "ol" : "ul";
+    blocks.push(<Tag key={`list-${blocks.length}`} className={`my-1 space-y-1 ${ordered ? "list-decimal pl-5" : "list-disc pl-5"}`}>{list.map((item, index) => <li key={index}><InlineMarkdown value={item.content} /></li>)}</Tag>);
+    list = [];
+  };
+  lines.forEach((line, index) => {
+    const bullet = line.match(/^\s*[-*+]\s+(.+)$/);
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (bullet || ordered) {
+      list.push({ ordered: Boolean(ordered), content: (bullet ?? ordered)![1] });
+      return;
+    }
+    flush();
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+    blocks.push(heading ? <p key={index} className="mt-2 font-medium"><InlineMarkdown value={heading[1]} /></p> : <p key={index} className={line ? "" : "h-2"}>{line && <InlineMarkdown value={line} />}</p>);
+  });
+  flush();
+  return <div>{blocks}</div>;
 }
 
-function ResultView({ result, reviewed, onReview, onExport }: { result: TenderAgentResult; reviewed: boolean; onReview: () => void; onExport: () => void }) { return <div className="space-y-5"><section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium">项目基本信息</p><h2 className="mt-2 text-2xl font-medium tracking-[-0.04em]">{result.document.projectInfo.projectName}</h2><p className="mt-2 text-sm text-neutral-500">{result.document.name}</p></div><div className="rounded-2xl bg-[#edf7d5] px-4 py-3 text-center"><p className="text-[11px] text-neutral-500">总体匹配度</p><p className="mt-1 text-2xl font-medium">{result.matchScore.value}%</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[["预算", result.document.projectInfo.budget], ["截止时间", result.document.projectInfo.deadline], ["交付周期", result.document.projectInfo.deliveryPeriod], ["地点", result.document.projectInfo.location]].map(([label, value]) => <div key={label} className="rounded-2xl bg-[#f7f8f9] p-3"><p className="text-[11px] text-neutral-400">{label}</p><p className="mt-1 text-sm font-medium">{value}</p></div>)}</div>{result.document.scoringRules.length > 0 && <div className="mt-4 rounded-2xl bg-[#f7f8f9] p-4"><p className="text-xs font-medium">评分标准</p><div className="mt-2 space-y-1">{result.document.scoringRules.map((item) => <p className="text-xs leading-6 text-neutral-600" key={item.description}>{item.description} <span className="text-neutral-400">· {item.source.location}</span></p>)}</div></div>}<p className="mt-4 text-xs leading-6 text-neutral-500">{result.matchScore.formula}</p></section>
-  <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><p className="text-sm font-medium">招标要求偏离分析</p><p className="mt-1 text-xs text-neutral-500">按确定性匹配规则计算：符合 {result.matchScore.passed} 项 · 部分符合 {result.matchScore.partial} 项 · 缺失 {result.matchScore.missing} 项 · 资料不足 {result.matchScore.unknown} 项。</p><div className="mt-5 overflow-x-auto"><table className="min-w-[820px] w-full text-left text-xs"><thead className="border-b border-black/10 text-neutral-400"><tr><th className="pb-3 pr-4 font-medium">招标要求</th><th className="pb-3 pr-4 font-medium">我方能力</th><th className="pb-3 pr-4 font-medium">匹配状态</th><th className="pb-3 pr-4 font-medium">风险</th><th className="pb-3 font-medium">建议动作</th></tr></thead><tbody>{result.matches.map((match) => <tr key={match.requirementId} className="border-b border-black/5 align-top"><td className="py-4 pr-4 leading-6 font-medium">{match.requirement}<SourceChips sources={match.evidence} /></td><td className="py-4 pr-4 leading-6 text-neutral-600">{match.ourCapability}</td><td className="py-4 pr-4"><span className={`rounded-full px-2 py-1 ${statusStyle[match.status]}`}>{statusLabel[match.status]}</span></td><td className="py-4 pr-4"><span className={`rounded-full px-2 py-1 ${riskStyle[match.risk]}`}>{match.risk}</span></td><td className="py-4 leading-6 text-neutral-600">{match.suggestedAction}</td></tr>)}</tbody></table></div></section>
-  <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]"><div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><div className="flex items-center gap-2"><CircleAlert size={16} /><p className="text-sm font-medium">关键风险与人工确认</p></div><div className="mt-5 space-y-3">{result.risks.length ? result.risks.map((risk) => <div key={risk.relatedRequirementIds[0]} className="rounded-2xl bg-[#f7f8f9] p-4"><span className={`rounded-full px-2 py-1 text-[10px] font-medium ${riskStyle[risk.level]}`}>{risk.level}</span><p className="mt-3 text-sm font-medium">{risk.title}</p><p className="mt-2 text-xs leading-6 text-neutral-600">{risk.description}</p></div>) : <p className="text-sm text-neutral-500">未发现需要升级的风险项；仍需人工复核。</p>}</div><button onClick={onReview} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-black px-4 py-3 text-sm font-medium text-white"><ShieldCheck size={15} />{reviewed ? "已标记：等待人工复核" : "标记为待人工复核"}</button><button onClick={onExport} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium"><Download size={15} />导出分析建议</button></div><div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6"><div className="flex items-center gap-2"><FileText size={16} /><p className="text-sm font-medium">技术响应建议</p></div><p className="mt-2 text-xs leading-6 text-neutral-500">仅生成目录与章节建议，不自动生成或提交正式标书。</p><div className="mt-4 flex flex-wrap gap-2">{result.solution.outline.map((item, index) => <span key={item} className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] text-neutral-600">{index + 1}. {item}</span>)}</div><div className="mt-5 space-y-3">{result.solution.sections.map((section) => <details key={section.title} className="group rounded-2xl bg-[#f7f8f9] p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3"><p className="text-sm font-medium">{section.title}</p><ChevronDown className="transition group-open:rotate-180" size={16} /></summary><p className="mt-3 text-xs leading-6 text-neutral-600">招标要求：{section.tenderRequirement}</p><p className="mt-2 text-xs leading-6 text-neutral-700">{section.responseSuggestion}</p><p className="mt-2 text-xs leading-6 text-neutral-500">待确认：{section.pendingConfirmation.join("；")}</p><SourceChips sources={section.sources} /></details>)}</div></div></section>
-  <section className="rounded-[24px] border border-amber-200 bg-amber-50 p-5 text-sm leading-7 text-amber-950"><div className="flex gap-3"><Database className="mt-1 shrink-0" size={17} /><p>{result.notice}</p></div>{result.toolResults.some((item) => item.status === "not_configured") && <div className="mt-3 flex gap-2 text-xs text-amber-900"><Search size={15} />Web Search：未配置。外部政策与标准可在后续通过 provider adapter 接入；不会用于判断企业内部资质。</div>}</section></div>; }
+export function TenderAgentWorkspace() {
+  const [result, setResult] = useState<TenderAgentResult>();
+  const [error, setError] = useState("");
+  const [running, setRunning] = useState(false);
+  const [reviewedIds, setReviewedIds] = useState<string[]>([]);
+  const [companyMode, setCompanyMode] = useState<CompanyWorkspaceMode>("demo");
+  const [task, setTask] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [analysisStale, setAnalysisStale] = useState(false);
+  async function startAnalysis() {
+    if (!uploadedFiles.length || running) return;
+    setRunning(true);
+    setError("");
+    setReviewedIds([]);
+    try {
+      const body = new FormData();
+      uploadedFiles.forEach((file) => body.append("file", file));
+      body.append("companyMode", companyMode);
+      body.append("action", "analyze");
+      const response = await fetch("/api/tender-agent", {
+        method: "POST",
+        body,
+      });
+      const data = (await response.json()) as {
+        result?: TenderAgentResult;
+        message?: string;
+      };
+      if (!response.ok || !data.result)
+        throw new Error(data.message || "分析未完成。");
+      setResult(data.result);
+      setAnalysisStale(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "分析未完成。");
+    } finally {
+      setRunning(false);
+    }
+  }
+  async function askAgent() {
+    if (!result) {
+      setError("请先完成投标分析后再继续询问。");
+      return;
+    }
+    if (running) return;
+    const enteredQuestion = task.trim();
+    if (!enteredQuestion) {
+      setError("请输入需要继续询问的问题。");
+      return;
+    }
+    setRunning(true);
+    setError("");
+    try {
+      const response = await fetch("/api/tender-agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "question",
+          task: enteredQuestion,
+          result,
+          conversation,
+        }),
+      });
+      const data = (await response.json()) as {
+        answer?: string;
+        message?: string;
+      };
+      if (!response.ok || !data.answer)
+        throw new Error(data.message || "AI 问答未完成。");
+      setConversation((messages) => [
+        ...messages,
+        { role: "user", content: enteredQuestion },
+        { role: "assistant", content: data.answer! },
+      ]);
+      setTask("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI 分析未完成。");
+    } finally {
+      setRunning(false);
+    }
+  }
+  function toggleReview(id: string) {
+    setReviewedIds((ids) =>
+      ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
+    );
+  }
+  function exportResult() {
+    if (!result) return;
+    const text = `# 投标分析建议\n\n## 应标准备度\n${result.analysisSummary.readinessScore}%\n${result.analysisSummary.readinessFormula}\n\n## 逐条判断\n${result.matches.map((item) => `- [${statusLabel[item.status]}] ${item.requirement}\n  - 依据：${item.reason}\n  - 证据：${item.evidenceIds.join("、") || "无"}\n  - 建议：${item.suggestedAction}`).join("\n")}\n\n## 人工确认\n${result.notice}`;
+    const url = URL.createObjectURL(
+      new Blob([text], { type: "text/markdown;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "投标分析建议.md";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  return (
+    <section className="bg-[#f7f8f9] py-14 lg:py-20">
+      <div className="mx-auto max-w-7xl px-5 lg:px-8">
+        <div className="max-w-4xl">
+          <p className="section-kicker">AI Tender & Solution Agent · Phase 5</p>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <h1 className="text-4xl font-medium tracking-[-0.05em] sm:text-6xl">
+              AI 招投标与方案生成 Agent
+            </h1>
+            {result && (
+              <button
+                onClick={() => setTraceOpen(true)}
+                className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium"
+              >
+                查看 Agent 轨迹
+              </button>
+            )}
+          </div>
+          <p className="mt-5 max-w-3xl text-sm leading-7 text-neutral-500">
+            从招标文件出发，完成需求分类、企业证据核验、风险识别与技术应答草稿生成。
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => setCompanyMode("demo")}
+              className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "demo" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
+            >
+              演示企业资料
+            </button>
+            <button
+              onClick={() => setCompanyMode("workspace")}
+              className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "workspace" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
+            >
+              真实企业资料
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-neutral-400">
+            {companyMode === "demo"
+              ? "当前使用示例供应商资料，仅用于作品集演示。"
+              : "当前仅使用本地真实企业资料，不会混入演示资料。"}
+          </p>
+        </div>
+        <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+            <div className="flex items-center gap-2">
+              <FileSearch size={16} />
+              <h2 className="font-medium">招标材料输入</h2>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-neutral-500">
+              可一次或分批追加项目资料。文件解析完成后，再手动启动完整投标分析。
+            </p>
+            <TenderFileDropzone
+              companyMode={companyMode}
+              onBusy={setRunning}
+              onFilesReady={(files) => {
+                setError("");
+                setReviewedIds([]);
+                if (result) setAnalysisStale(true);
+                setUploadedFiles(files);
+              }}
+            />
+            <div className="mt-6 border-t border-black/5 pt-5">
+              <p className="text-sm font-medium">整份招标文件自动分析</p>
+              <p className="mt-2 text-xs leading-6 text-neutral-500">
+                仅在点击后执行企业知识库、资格审查、技术偏离、评分、技术应答与综合投标判断。
+              </p>
+              <button
+                onClick={startAnalysis}
+                type="button"
+                disabled={running || !uploadedFiles.length}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-medium disabled:opacity-50"
+              >
+                <Sparkles size={16} />
+                {running ? "分析中…" : analysisStale ? "重新分析" : "开始投标分析"}
+              </button>
+            </div>
+            {result && (
+              <div className="mt-6 border-t border-black/5 pt-5">
+                <p className="text-sm font-medium">继续询问 Agent</p>
+                <textarea
+                  value={task}
+                  onChange={(event) => setTask(event.target.value)}
+                  placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
+                  className="mt-3 min-h-24 w-full rounded-xl border border-black/10 bg-[#f7f8f9] p-3 text-xs leading-5 outline-none focus:border-black/30"
+                />
+                <button
+                  onClick={askAgent}
+                  type="button"
+                  disabled={running || !task.trim()}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
+                >
+                  <Sparkles size={16} />
+                  {running ? "回答中…" : "发送"}
+                </button>
+                {conversation.length > 0 && (
+                  <div className="mt-4 space-y-3 border-t border-black/5 pt-4 text-xs leading-6">
+                    {conversation.map((message, index) => (
+                      <div
+                        key={`${message.role}-${index}`}
+                        className={`rounded-xl p-3 ${message.role === "user" ? "bg-[#f7f8f9] text-neutral-700" : "bg-[#f7ffe8] text-neutral-800"}`}
+                      >
+                        <p className="font-medium">
+                          {message.role === "user" ? "用户" : "AI"}
+                        </p>
+                        <div className="mt-1"><MarkdownText value={message.content} /></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <p className="mt-5 text-center text-xs text-neutral-500">
+              没有招标文件？{" "}
+              <button
+                onClick={() => setError("示例入口不参与本轮真实文件验收。")}
+                className="font-medium text-neutral-800 underline"
+              >
+                加载示例
+              </button>
+            </p>
+          </aside>
+          <div>
+            {running && (
+              <div className="flex min-h-[360px] items-center justify-center rounded-[28px] border border-black/5 bg-white p-8 text-sm text-neutral-600">
+                <LoaderCircle className="mr-2 animate-spin" size={18} />
+                {uploadedFiles.length
+                  ? "正在执行本次投标分析…"
+                  : "正在解析招标文件…"}
+              </div>
+            )}
+            {error && (
+              <div
+                role="alert"
+                className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"
+              >
+                <AlertTriangle className="mt-0.5 shrink-0" size={18} />
+                {error}
+              </div>
+            )}
+            {!running && result && (
+              <ResultView
+                result={result}
+                analysisStale={analysisStale}
+                reviewedIds={reviewedIds}
+                onToggleReview={toggleReview}
+                onExport={exportResult}
+              />
+            )}
+            {!running && !result && !error && (
+              <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-dashed border-black/10 bg-white p-8 text-center">
+                <Workflow size={34} className="text-neutral-300" />
+                <h2 className="mt-4 text-lg font-medium">等待招标材料</h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">
+                  可先上传并追加多个招标材料，解析完成后点击“开始投标分析”。
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        <PortfolioNarrative />
+      </div>
+      {result && (
+        <TraceDrawer
+          result={result}
+          open={traceOpen}
+          onClose={() => setTraceOpen(false)}
+        />
+      )}
+    </section>
+  );
+}
 
-function PortfolioNarrative() { const cards = [["业务问题", "招标文件信息密集且分散，售前需要在资格、技术、案例和交付之间建立可核验的判断。"], ["需求拆解", "将文本分为项目、资格、技术、评分、时间与交付，并保留原文位置。"], ["解决方案", "让 Planner 选择内部检索工具；让规则引擎处理硬条件、状态与风险。"], ["Tool Calling", "工具结果统一返回 query、results、sources、confidence 与 status，可展开查看。"], ["POC 测试", "覆盖正常文本、硬性条件、冲突、未知能力、注入、服务失败、空文件与 OCR 文本转写。"], ["项目边界", "没有真实客户、真实中标或真实 OCR / Web Search；所有企业资料均为演示数据。"]] as const; return <section className="mt-16"><div className="max-w-3xl"><p className="section-kicker">项目说明与复盘</p><h2 className="mt-4 text-3xl font-medium tracking-[-0.045em] sm:text-4xl">从业务问题到可审计的 Agent 闭环</h2></div><div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{cards.map(([title, text], index) => <article key={title} className="rounded-[24px] border border-black/5 bg-white p-5"><p className="text-[11px] font-semibold text-neutral-400">0{index + 1}</p><h3 className="mt-8 text-lg font-medium">{title}</h3><p className="mt-3 text-sm leading-7 text-neutral-500">{text}</p></article>)}</div><div className="mt-5 rounded-[24px] bg-black p-6 text-white"><p className="text-xs font-semibold tracking-[0.14em] text-white/50">复盘</p><p className="mt-3 max-w-4xl text-sm leading-7 text-white/70">这个 POC 的重点不是“让 LLM 自动做投标决策”，而是把不可信招标文本、内部证据、规则判断、风险暴露与人工确认组织成可以现场讲清楚的售前工作流。下一步应补齐真实 OCR、可配置 Web Search、文件解析与正式证据管理。</p></div></section>; }
+function ResultView({
+  result,
+  analysisStale,
+  reviewedIds,
+  onToggleReview,
+  onExport,
+}: {
+  result: TenderAgentResult;
+  analysisStale: boolean;
+  reviewedIds: string[];
+  onToggleReview: (id: string) => void;
+  onExport: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>("overview");
+  const [filter, setFilter] = useState<"ALL" | MatchStatus | "HIGH">("ALL");
+  const summary = result.analysisSummary;
+  const tabs: Array<[Tab, string]> = [
+    ["overview", "项目概览"],
+    ["qualification", "资格审查"],
+    ["technical", "技术偏离"],
+    ["scoring", "评分分析"],
+    ["response", "技术应答"],
+    ["library", "我方资料"],
+  ];
+  const qualification = result.matches.filter(
+    (item) => item.category === "资格审查",
+  );
+  const technical = result.matches.filter((item) =>
+    ["技术偏离", "商务要求", "实施交付", "售后服务"].includes(item.category),
+  );
+  const visibleTechnical = technical.filter((item) =>
+    filter === "ALL" || filter === "HIGH"
+      ? filter !== "HIGH" || item.risk === "HIGH"
+      : item.status === filter,
+  );
+  const callPath = result.execution.map((item) => item.label).join(" → ");
+  const metric = (value: string) => (summary.analyzed ? value : "—");
+  return (
+    <div className="space-y-5">
+      <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="section-kicker">投标分析总览</p>
+            <h2 className="mt-3 text-2xl font-medium tracking-[-0.04em] sm:text-3xl">
+              {result.document.projectInfo.projectName}
+            </h2>
+            <p className="mt-2 text-sm text-neutral-500">
+              项目编号：{result.document.projectInfo.projectCode} ·{" "}
+              {summary.analyzed ? "已完成分析" : "部分信息待确认"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-[#edf7d5] px-5 py-3">
+            <p className="text-[11px] text-neutral-500">投标建议</p>
+            <p className="mt-1 text-sm font-medium">{summary.recommendation}</p>
+          </div>
+        </div>
+        <article className="mt-5 rounded-2xl border border-[#dcecb9] bg-[#f7ffe8] p-4">
+          <p className="text-sm font-medium">
+            {result.finalAnswerStatus === "failed"
+              ? "AI综合结论生成失败"
+              : "AI 分析结论"}
+          </p>
+          <div className="mt-2 text-xs leading-6 text-neutral-700"><MarkdownText value={result.finalAnswer} /></div>
+        </article>
+        <p className="mt-4 text-xs text-neutral-500">
+          本次调用：{callPath || "仅完成文件解析"}
+        </p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <Metric
+            label="应标准备度"
+            value={metric(`${summary.readinessScore}%`)}
+            hint="仅用于项目材料准备度参考，不代表最终中标概率。"
+          />
+          <Metric
+            label="企业资料覆盖率"
+            value={metric(`${summary.evidenceCoverage}%`)}
+            hint="已有企业证据要求数 / 需要企业证明的要求数。"
+          />
+          <Metric label="符合" value={metric(`${summary.passCount} 项`)} />
+          <Metric
+            label="待确认"
+            value={metric(`${summary.pendingCount} 项`)}
+          />
+          <Metric label="资料缺失" value={metric(`${summary.missingEvidenceCount} 项`)} />
+          <Metric label="明确不符合" value={metric(`${summary.failCount} 项`)} />
+          <Metric
+            label="高风险"
+            value={metric(`${summary.highRiskCount} 项`)}
+          />
+        </div>
+        {summary.analyzed && (
+          <p className="mt-4 text-xs leading-6 text-neutral-500">
+            {summary.readinessFormula}
+          </p>
+        )}
+        {analysisStale && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-900">
+            检测到新增项目材料，当前分析结果可能已过期。请点击“重新分析”刷新判断、风险与建议。
+          </p>
+        )}
+      </section>
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-black/5 bg-white p-2">
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`shrink-0 rounded-xl px-3 py-2 text-xs font-medium ${tab === id ? "bg-black text-white" : "text-neutral-500 hover:bg-neutral-100"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "overview" && (
+        <Overview result={result} reviewedCount={reviewedIds.length} />
+      )}
+      {tab === "qualification" && (
+        <RequirementList
+          title="资格审查"
+          description="仅展示供应商资格、企业资质、人员与业绩要求。"
+          matches={qualification}
+          reviewedIds={reviewedIds}
+          onToggleReview={onToggleReview}
+        />
+      )}
+      {tab === "technical" && (
+        <section className="space-y-4">
+          <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">技术偏离</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  技术、商务、交付与售后要求：{technical.length} 项。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["ALL", "PASS", "PENDING", "MISSING_EVIDENCE", "FAIL", "HIGH"] as const).map(
+                  (item) => (
+                    <button
+                      key={item}
+                      onClick={() => setFilter(item)}
+                      className={`rounded-full px-3 py-1.5 text-xs ${filter === item ? "bg-black text-white" : "bg-[#f7f8f9] text-neutral-600"}`}
+                    >
+                      {item === "ALL"
+                        ? "全部"
+                        : item === "HIGH"
+                          ? "高风险"
+                          : statusLabel[item]}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+          </div>
+          <RequirementList
+            title="逐条技术偏离"
+            description="无企业证据的硬件规格将显示为待确认，不会自动承诺符合。"
+            matches={visibleTechnical}
+            reviewedIds={reviewedIds}
+            onToggleReview={onToggleReview}
+          />
+        </section>
+      )}
+      {tab === "scoring" && <ScoringView result={result} />}
+      {tab === "response" && <ResponseView result={result} />}
+      {tab === "library" && <LibraryView />}
+      <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+        <p>{result.notice}</p>
+        <button
+          onClick={onExport}
+          className="shrink-0 rounded-full border border-amber-300 px-4 py-2 text-xs font-medium"
+        >
+          <Download className="mr-1 inline" size={14} />
+          导出分析建议
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div title={hint} className="rounded-2xl bg-[#f7f8f9] p-3">
+      <p className="text-[11px] text-neutral-400">{label}</p>
+      <p className="mt-1 text-lg font-medium">{value}</p>
+    </div>
+  );
+}
+function TraceDrawer({
+  result,
+  open,
+  onClose,
+}: {
+  result: TenderAgentResult;
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/20"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Agent 执行轨迹"
+    >
+      <aside className="ml-auto flex h-full w-full max-w-xl flex-col bg-white p-5 shadow-2xl sm:p-7">
+        <div className="flex items-center justify-between border-b border-black/5 pb-4">
+          <div>
+            <p className="text-lg font-medium">Agent 执行轨迹</p>
+            <p className="mt-1 text-xs text-neutral-500">
+              仅展示本次实际 execution。
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-black/10 px-3 py-1.5 text-xs"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="mt-5 flex-1 space-y-3 overflow-y-auto">
+          {result.execution.map((item, index) => (
+            <details
+              key={`${item.id}-${index}`}
+              open
+              className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4"
+            >
+              <summary className="cursor-pointer text-sm font-medium">
+                {item.label} ·{" "}
+                {item.status === "completed"
+                  ? "完成"
+                  : item.status === "skipped"
+                    ? "已跳过"
+                  : item.status === "not_configured"
+                    ? "未配置"
+                    : "失败"}
+              </summary>
+              <dl className="mt-3 grid gap-2 text-xs leading-5 text-neutral-600">
+                <div>
+                  <dt className="text-neutral-400">决策方式</dt>
+                  <dd>{item.trace.decisionSource === "llm" ? "模型自主决策" : item.trace.decisionSource === "fallback" ? "规则降级" : "规则决策"}</dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-400">调用原因</dt>
+                  <dd>{item.reason}</dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-400">输入摘要</dt>
+                  <dd>{item.inputSummary}</dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-400">Observation</dt>
+                  <dd>{item.trace.observation}</dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-400">Provider / 时长 / 来源</dt>
+                  <dd>
+                    {item.trace.provider ?? "—"} · {item.durationMs} ms ·{" "}
+                    {item.trace.sourceCount} 条
+                  </dd>
+                </div>
+                {item.trace.retrievalMethod && (
+                  <div>
+                    <dt className="text-neutral-400">检索方式</dt>
+                    <dd>{item.trace.retrievalMethod}</dd>
+                  </div>
+                )}
+                {item.trace.error && (
+                  <div>
+                    <dt className="text-neutral-400">错误</dt>
+                    <dd>{item.trace.error}</dd>
+                  </div>
+                )}
+                {item.trace.fallback && (
+                  <div>
+                    <dt className="text-neutral-400">降级说明</dt>
+                    <dd>{item.trace.fallback}</dd>
+                  </div>
+                )}
+              </dl>
+            </details>
+          ))}
+          {!result.execution.length && (
+            <p className="text-sm text-neutral-500">尚无执行记录。</p>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+function Overview({
+  result,
+  reviewedCount,
+}: {
+  result: TenderAgentResult;
+  reviewedCount: number;
+}) {
+  const info = result.document.projectInfo;
+  const materialGaps = result.matches.filter(
+    (item) => item.status === "MISSING_EVIDENCE" || (item.status === "PENDING" && item.mandatory),
+  );
+  const fields = [
+    ["采购人", info.purchaser],
+    ["预算 / 限价", info.budget],
+    ["投标截止", info.deadline],
+    ["建设周期", info.deliveryPeriod],
+    ["采购方式", info.procurementMethod],
+    ["交付地点", info.location],
+  ];
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+      <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+        <p className="text-sm font-medium">项目基本信息</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {fields.map(([label, value]) => (
+            <div key={label} className="rounded-2xl bg-[#f7f8f9] p-3">
+              <p className="text-[11px] text-neutral-400">{label}</p>
+              <p className="mt-1 text-sm leading-6 text-neutral-700">
+                {value === "资料未提供" || value === "待确认"
+                  ? "未提取到"
+                  : value}
+              </p>
+            </div>
+          ))}
+        </div>
+        {info.targetSummary !== "资料未提供" &&
+          info.targetSummary !== "待确认" && (
+            <p className="mt-4 text-xs leading-6 text-neutral-500">
+              采购标的简述：{info.targetSummary}
+            </p>
+          )}
+      </section>
+      <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">TOP 风险</p>
+          <span className="text-xs text-neutral-400">
+            待人工复核 {reviewedCount} 项
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {result.risks.slice(0, 5).map((item) => (
+            <div
+              key={item.relatedRequirementIds[0]}
+              className="rounded-2xl bg-[#f7f8f9] p-3"
+            >
+              <RiskBadge risk={item.level} />
+              <p className="mt-2 text-xs leading-5 text-neutral-700">
+                {item.description}
+              </p>
+            </div>
+          ))}
+          {!result.risks.length && (
+            <p className="text-sm text-neutral-500">
+              未发现需要升级的风险项；仍需人工复核。
+            </p>
+          )}
+        </div>
+      </section>
+      <section className="rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
+        <p className="text-sm font-medium">Agent 执行轨迹</p>
+        <p className="mt-1 text-xs leading-5 text-neutral-500">
+          {result.planner.mode === "deepseek-tool-calling"
+            ? "DeepSeek 根据每步 observation 选择下一工具。"
+            : "本次包含规则降级步骤；每步均展示实际决策方式与失败原因。"}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {result.execution.map((item, index) => (
+            <div
+              key={`${item.id}-${index}`}
+              className="flex items-center gap-2"
+            >
+              <span className="rounded-full bg-[#f7f8f9] px-3 py-1.5 text-xs text-neutral-700">
+                {item.label}
+                {item.status === "not_configured" ? "（未配置）" : item.status === "skipped" ? "（已跳过）" : ""}
+              </span>
+              {index < result.execution.length - 1 && (
+                <span className="text-neutral-300">→</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-neutral-500">
+          {result.agentConclusion}
+        </p>
+      </section>
+      <section className="rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
+        <p className="text-sm font-medium">建议补充材料</p>
+        <p className="mt-1 text-xs leading-5 text-neutral-500">仅汇总当前要求中资料缺失或关键待确认事项，不会虚构材料。</p>
+        {materialGaps.length ? (
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-xs leading-6 text-neutral-700">
+            {materialGaps.map((item) => <li key={item.requirementId}>{item.requirement}（影响：{item.requirementId}）</li>)}
+          </ol>
+        ) : <p className="mt-3 text-xs text-neutral-500">当前未发现需要补充的关键材料；仍请复核原件有效性。</p>}
+      </section>
+      <details className="rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
+        <summary className="cursor-pointer text-sm font-medium">
+          查看调用原因、Observation 与未调用工具
+        </summary>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {result.execution.map((item, index) => (
+            <div
+              key={`${item.id}-${index}`}
+              className="rounded-xl bg-[#f7f8f9] p-3"
+            >
+              <p className="text-xs font-medium">{item.label}</p>
+              <p className="mt-2 text-[11px] text-neutral-400">调用原因</p>
+              <p className="mt-1 text-xs leading-5 text-neutral-600">
+                {item.reason}
+              </p>
+              <p className="mt-2 text-[11px] text-neutral-400">Observation</p>
+              <p className="mt-1 text-xs leading-5 text-neutral-600">
+                {item.trace.observation}
+              </p>
+              <p className="mt-2 text-[11px] text-neutral-400">决策方式</p>
+              <p className="mt-1 text-xs leading-5 text-neutral-600">
+                {item.trace.decisionSource === "llm" ? "模型自主决策" : item.trace.decisionSource === "fallback" ? "规则降级" : "规则决策"}
+                {item.trace.fallback ? ` · ${item.trace.fallback}` : ""}
+                {item.trace.error ? ` · 失败原因：${item.trace.error}` : ""}
+              </p>
+              <p className="mt-2 text-[11px] text-neutral-400">
+                来源：{item.trace.sourceCount} · {item.durationMs} ms
+                {item.trace.retrievalMethod
+                  ? ` · ${item.trace.retrievalMethod}`
+                  : ""}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-xl bg-[#f7f8f9] p-3">
+          <p className="text-xs font-medium">本次未调用</p>
+          <p className="mt-2 text-xs leading-6 text-neutral-500">
+            {result.toolCoverage
+              .filter((item) => item.status === "not_called")
+              .map((item) => `${item.tool}：${item.reason}`)
+              .join("；") || "无"}
+          </p>
+        </div>
+        <div className="mt-4 rounded-xl bg-[#f7f8f9] p-3">
+          <p className="text-xs font-medium">外部核验</p>
+          <p className="mt-1 text-xs text-neutral-500">
+            {result.externalVerification.status === "NOT_CONFIGURED"
+              ? "外部核验未启用"
+              : result.externalVerification.status === "NOT_EXECUTED"
+                ? "未执行（外部信息仅作辅助核验，不替代内部原始证据）"
+                : result.externalVerification.status}
+          </p>
+          {result.externalVerification.results.map((item) => (
+            <a
+              key={item.url}
+              className="mt-2 block text-xs text-neutral-700 underline"
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {item.title} · {item.domain}
+            </a>
+          ))}
+        </div>
+        {result.debug && (
+          <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3">
+            <summary className="cursor-pointer text-xs font-medium">
+              Agent Debug（仅开发环境）
+            </summary>
+            <p className="mt-2 text-xs leading-6 text-neutral-500">
+              runId：{result.debug.runId}
+              <br />
+              模型：{result.debug.model}
+              <br />
+              Agent 类型：{result.debug.agentType}
+              <br />
+              决策来源：{result.debug.decisionSource}
+              <br />
+              工具顺序：{result.debug.actualToolCalls.join(" → ") || "无"}
+              <br />
+              Provider：DeepSeek {result.debug.providerStatus.deepSeek} / OCR{" "}
+              {result.debug.providerStatus.ocr} / Tavily{" "}
+              {result.debug.providerStatus.tavily} / Embedding{" "}
+              {result.debug.providerStatus.embedding}
+            </p>
+          </details>
+        )}
+      </details>
+    </div>
+  );
+}
+function AgentCapabilities() {
+  const [capabilities, setCapabilities] = useState<Record<string, unknown>>();
+  useEffect(() => {
+    void fetch("/api/tender-agent")
+      .then((response) => (response.ok ? response.json() : undefined))
+      .then((data: { capabilities?: Record<string, unknown> } | undefined) =>
+        setCapabilities(data?.capabilities),
+      )
+      .catch(() => undefined);
+  }, []);
+  if (!capabilities) return null;
+  return (
+    <details className="mt-5 rounded-2xl border border-dashed border-black/10 p-4">
+      <summary className="cursor-pointer text-xs font-medium">
+        Agent 能力状态（仅开发环境）
+      </summary>
+      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-[10px] leading-5 text-neutral-500">
+        {JSON.stringify(capabilities, null, 2)}
+      </pre>
+    </details>
+  );
+}
+function RequirementList({
+  title,
+  description,
+  matches,
+  reviewedIds,
+  onToggleReview,
+}: {
+  title: string;
+  description: string;
+  matches: RequirementMatch[];
+  reviewedIds: string[];
+  onToggleReview: (id: string) => void;
+}) {
+  return (
+    <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="mt-1 text-xs text-neutral-500">{description}</p>
+      </div>
+      <div className="mt-5 space-y-3">
+        {matches.map((match) => (
+          <article
+            key={match.requirementId}
+            className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[11px] text-neutral-400">
+                  {match.requirementId} · {match.category}
+                </p>
+                <p className="mt-1 text-sm leading-6 font-medium">
+                  {match.requirement}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <StatusBadge status={match.status} />
+                <RiskBadge risk={match.risk} />
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="text-[11px] text-neutral-400">判断依据</p>
+                <p className="mt-1 text-xs leading-6 text-neutral-700">
+                  {match.reason}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-neutral-400">建议</p>
+                <p className="mt-1 text-xs leading-6 text-neutral-700">
+                  {match.suggestedAction}
+                </p>
+              </div>
+            </div>
+            <Evidence sources={match.evidence} />
+            <button
+              onClick={() => onToggleReview(match.requirementId)}
+              className={`mt-3 rounded-full px-3 py-1.5 text-xs font-medium ${reviewedIds.includes(match.requirementId) ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
+            >
+              <ShieldCheck className="mr-1 inline" size={13} />
+              {reviewedIds.includes(match.requirementId)
+                ? "待人工复核"
+                : "加入人工复核"}
+            </button>
+          </article>
+        ))}
+        {!matches.length && (
+          <p className="py-8 text-center text-sm text-neutral-400">
+            当前分类未识别到对应要求。
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+function ScoringView({ result }: { result: TenderAgentResult }) {
+  const emptyMessage =
+    result.scoringStatus === "SCORING_SUSPECTED"
+      ? "疑似存在评分标准，但当前解析失败；请人工核对原始评分表。"
+      : "本文件未提供明确评分标准，因此不进行评分预测。";
+  return (
+    <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+      <p className="text-sm font-medium">评分分析</p>
+      <p className="mt-1 text-xs leading-6 text-neutral-500">
+        AI 辅助估算，仅供投标准备参考，最终以评标委员会结果为准。
+      </p>
+      <div className="mt-5 space-y-3">
+        {result.scoringAnalysis.map((item) => (
+          <article
+            key={item.id}
+            className="rounded-2xl bg-[#f7f8f9] p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{item.item}</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  满分：{item.maxScore} · 预计得分：{item.estimatedScore}
+                </p>
+              </div>
+              <RiskBadge risk={item.risk} />
+            </div>
+            <p className="mt-3 text-xs leading-6 text-neutral-600">
+              得分规则：{item.scoringRules.join("；")}
+            </p>
+            <p className="mt-1 text-xs leading-6 text-neutral-600">
+              判断依据：{item.reason}
+            </p>
+            <p className="mt-1 text-xs leading-6 text-neutral-600">
+              置信度：{item.confidence === "high" ? "高" : item.confidence === "medium" ? "中" : "低"}
+              {item.manualReviewRequired ? " · 需人工复核" : ""}
+            </p>
+            <Evidence sources={[...item.bidEvidence, ...item.companyEvidence]} />
+          </article>
+        ))}
+        {!result.scoringAnalysis.length && (
+          <p className="py-8 text-center text-sm text-neutral-400">
+            {emptyMessage}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+function ResponseView({ result }: { result: TenderAgentResult }) {
+  return (
+    <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex gap-2">
+        <FileText size={16} />
+        <div>
+          <p className="text-sm font-medium">AI 技术应答草稿</p>
+          <p className="mt-1 text-xs leading-6 text-neutral-500">
+            仅基于本次招标要求和已检索企业证据生成；正式投标前需人工复核。
+          </p>
+        </div>
+      </div>
+      <article className="mt-5 rounded-2xl border border-[#dcecb9] bg-[#f7ffe8] p-4">
+        <p className="text-xs font-medium">DeepSeek 最终结论</p>
+        <div className="mt-2 text-xs leading-6 text-neutral-800"><MarkdownText value={result.finalAnswer} /></div>
+      </article>
+      {result.evidenceConflicts.length > 0 && (
+        <article className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-medium text-amber-900">发现证据冲突</p>
+          {result.evidenceConflicts.map((item) => (
+            <p
+              key={item.requirementId}
+              className="mt-2 text-xs leading-6 text-amber-900"
+            >
+              {item.requirement}：{item.judgment}
+            </p>
+          ))}
+        </article>
+      )}
+      <div className="mt-3 space-y-3">
+        {result.solution.sections.map((item) => (
+          <article key={item.title} className="rounded-2xl bg-[#f7f8f9] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="mt-2 text-xs leading-6 text-neutral-600">
+                  甲方要求：{item.tenderRequirement}
+                </p>
+              </div>
+              <StatusBadge status={item.responseStatus} />
+            </div>
+            <p className="mt-3 text-xs leading-6 text-neutral-800">
+              我方响应：{item.responseSuggestion}
+            </p>
+            {item.capabilities.length > 0 && (
+              <p className="mt-3 text-xs text-neutral-500">
+                能力引用：{item.capabilities.join("；")}
+              </p>
+            )}
+            {item.cases.length > 0 && (
+              <p className="mt-1 text-xs text-neutral-500">
+                案例引用：{item.cases.join("；")}
+              </p>
+            )}
+            <Evidence sources={item.sources} />
+          </article>
+        ))}
+        {!result.solution.sections.length && (
+          <p className="py-8 text-center text-sm text-neutral-400">
+            当前未识别到可生成应答的技术或交付要求。
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+function LibraryView() {
+  return (
+    <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+      <p className="text-sm font-medium">我方资料库</p>
+      <p className="mt-1 text-xs text-neutral-500">
+        {companyLibraryOverview.company} · {companyLibraryOverview.label}
+      </p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {companyLibraryOverview.sections.map(([name, count]) => (
+          <div key={name} className="rounded-2xl bg-[#f7f8f9] p-4">
+            <p className="text-sm font-medium">{name}</p>
+            <p className="mt-2 text-2xl font-medium">{count}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-xs text-neutral-400">
+        {companyLibraryOverview.notice}
+      </p>
+      <TenderCompanyLibraryManager />
+    </section>
+  );
+}
+function PortfolioNarrative() {
+  return (
+    <section className="mt-16">
+      <p className="section-kicker">项目说明与复盘</p>
+      <h2 className="mt-4 text-3xl font-medium tracking-[-0.045em] sm:text-4xl">
+        从业务问题到可审计的 Agent 闭环
+      </h2>
+      <p className="mt-4 max-w-3xl text-sm leading-7 text-neutral-500">
+        本 POC
+        将招标文本、企业证据、规则判断、风险暴露与人工确认组织为可追溯流程；不替代最终投标决策。
+      </p>
+      <AgentCapabilities />
+    </section>
+  );
+}

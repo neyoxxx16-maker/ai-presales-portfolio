@@ -10,12 +10,16 @@
     "test:tea": "node scripts/test-tea-assistant.cjs",
     "test:rag": "node scripts/test-tea-rag.cjs",
     "test:tender": "node scripts/test-tender-agent.cjs",
+    "smoke:tender-rag": "node scripts/smoke-tender-hybrid-rag.cjs",
+    "test:tender:ocr": "python scripts/test-paddle-ocr.py",
     "build:tea-index": "node scripts/build-tea-index.cjs",
     "eval:tea-rag": "node scripts/eval-tea-rag.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
+    "mammoth": "^1.12.2",
     "next": "15.4.6",
+    "pdf-parse": "^2.4.5",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

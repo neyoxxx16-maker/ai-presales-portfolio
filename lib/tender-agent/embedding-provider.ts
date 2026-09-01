@@ -1,0 +1,8 @@
+import { embedLocally } from "@/lib/rag/local-embeddings";
+
+export type EmbeddingProviderStatus = { enabled: boolean; provider: "local" | "openai-compatible" | "none"; model?: string };
+export function embeddingProviderStatus(): EmbeddingProviderStatus { const provider = process.env.TENDER_EMBEDDING_PROVIDER; if (provider === "local") return { enabled: true, provider: "local", model: process.env.LOCAL_EMBEDDING_MODEL }; if (provider === "openai-compatible" && process.env.TENDER_EMBEDDING_BASE_URL && process.env.TENDER_EMBEDDING_API_KEY && process.env.TENDER_EMBEDDING_MODEL) return { enabled: true, provider: "openai-compatible", model: process.env.TENDER_EMBEDDING_MODEL }; return { enabled: false, provider: "none" }; }
+export async function embedTexts(input: string[]): Promise<number[][]> {
+  const status = embeddingProviderStatus(); if (!status.enabled) throw new Error("embedding_not_configured"); if (status.provider === "local") return embedLocally(input);
+  const response = await fetch(`${process.env.TENDER_EMBEDDING_BASE_URL!.replace(/\/$/, "")}/embeddings`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TENDER_EMBEDDING_API_KEY}` }, body: JSON.stringify({ model: process.env.TENDER_EMBEDDING_MODEL, input }), signal: AbortSignal.timeout(30000) }); if (!response.ok) throw new Error(`embedding_request_failed_${response.status}`); const data = await response.json() as { data?: Array<{ index: number; embedding: number[] }> }; const vectors = (data.data ?? []).sort((a, b) => a.index - b.index).map((item) => item.embedding); if (vectors.length !== input.length || vectors.some((item) => !item.length)) throw new Error("embedding_malformed_output"); return vectors;
+}

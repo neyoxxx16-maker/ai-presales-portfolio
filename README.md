@@ -37,8 +37,13 @@ npm run build
 
 将服务端密钥放入 `.env.local`，只提交 `.env.example`。严禁使用 `NEXT_PUBLIC_DEEPSEEK_API_KEY`。DeepSeek 失败时 Tender Agent 继续运行 Sample / 规则 Planner 回退，不暴露密钥或原始错误。
 
-- TXT / Markdown：当前真实解析。
-- PDF / Word / 扫描文件：已保留 OCR Tool Interface；当前未接入解析服务，建议导出文本或使用 Sample 文件。不得宣称为真实 OCR。
+- TXT / Markdown：直接读取正文。
+- DOCX：通过 Mammoth 提取标题、段落、列表与表格文字。
+- 文本型 PDF：通过 PDF 文本提取；扫描 PDF 在配置 Azure Document Intelligence OCR 后可进入真实 OCR 流程，未配置时明确标记为不可用，不生成假文本。
+
+## 真实企业资料库（本地运行时）
+
+`/demo/tender-agent` 可切换至“真实企业资料”，并在“我方资料”中导入 PDF、DOCX、TXT、Markdown、PNG、JPG 或 JPEG。资料、提取文本和本地索引仅保存于 `storage/tender-company/`，该目录已加入 `.gitignore`，请勿提交公开仓库。未配置语义检索或 OCR Provider 时，页面会明确显示关键词检索降级或 OCR 未启用状态。
 - Web Search：已预留 `search_external_web` adapter；未配置 provider 时显示“未配置”，不会用外部信息判断企业内部资质。
 - 所有匹配结论、案例和企业资料都是 POC 演示。最终投标、资格有效性、承诺、案例证明和风险接受必须由人工确认。
 

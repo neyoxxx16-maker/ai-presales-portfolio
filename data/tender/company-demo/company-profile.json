@@ -1,0 +1,18 @@
+{
+  "id": "COMPANY-001",
+  "name": "云枢智能科技有限公司",
+  "englishName": "Yunshu Intelligence Technology Co., Ltd.",
+  "label": "Synthetic Demo Supplier",
+  "entityType": "有限责任公司",
+  "establishedAt": "2018-06-18",
+  "registeredCapital": "5000万元人民币",
+  "location": "浙江省杭州市",
+  "employeeCount": "约180人",
+  "rdCount": "约105人",
+  "focus": ["企业级大模型", "知识库", "AI Agent", "智能客服", "数据智能平台"],
+  "creditCode": "DEMO-91330100-YSZN-2018",
+  "synthetic": true,
+  "demo_only": true,
+  "evidence_source": "documents/company-profile.md",
+  "keywords": ["云枢智能", "成立时间", "企业主体", "大模型", "知识库", "Agent"]
+}

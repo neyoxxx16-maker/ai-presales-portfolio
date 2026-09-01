@@ -1,0 +1,8 @@
+[
+  {"id":"C001","name":"某省级政务大模型知识库项目","industry":"政务","amount":"420万元","content":["大模型私有化部署","RAG知识库","权限体系","审计","模型服务平台"],"acceptance":"已验收","similarity":"MATCH","status":"valid","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["政务","大模型","知识库","RAG","私有化部署","同类案例"]},
+  {"id":"C002","name":"某大型制造企业智能知识助手","industry":"制造","amount":"280万元","content":["RAG","Agent","文档解析","私有化部署"],"acceptance":"已验收","similarity":"MATCH","status":"valid","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["制造","RAG","Agent","文档解析","私有化部署","同类案例"]},
+  {"id":"C003","name":"某零售集团智能客服","industry":"零售","amount":"190万元","content":["智能客服","知识检索","人工转接"],"acceptance":"已验收","similarity":"MATCH","status":"valid","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["零售","智能客服","知识库","同类案例"]},
+  {"id":"C004","name":"某高校大模型教学科研平台","industry":"高校","amount":"350万元","content":["DeepSeek部署","GPU资源管理","模型服务","知识库"],"acceptance":"已验收","similarity":"MATCH","status":"valid","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["高校","DeepSeek","私有化部署","GPU","知识库","同类案例"]},
+  {"id":"C005","name":"某金融机构内部知识助手","industry":"金融","amount":"160万元","content":["知识库","权限控制","审计"],"acceptance":"试运行完成","similarity":"PARTIAL","status":"partial","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["金融","知识库","权限","审计","相关案例"]},
+  {"id":"C006","name":"某能源企业AI助手项目","industry":"能源","amount":"210万元","content":["Agent","工单问答","运维知识库"],"acceptance":"POC完成","similarity":"PARTIAL","status":"partial","synthetic":true,"evidence_source":"documents/case-evidence.md","keywords":["能源","Agent","知识库","相关案例"]}
+]
