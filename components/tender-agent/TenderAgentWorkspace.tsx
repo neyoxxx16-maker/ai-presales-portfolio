@@ -164,15 +164,39 @@ export function TenderAgentWorkspace() {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
   const [askingAgent, setAskingAgent] = useState(false);
+  const [showLatestMessage, setShowLatestMessage] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
+  const shouldAutoFollowRef = useRef(true);
+  const forceScrollToLatestRef = useRef(false);
   useEffect(() => {
     if (!askingAgent && !conversation.length) return;
     const container = chatScrollRef.current;
-    if (container)
+    if (container && (forceScrollToLatestRef.current || shouldAutoFollowRef.current)) {
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    else latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      forceScrollToLatestRef.current = false;
+      setShowLatestMessage(false);
+    } else if (!container && (forceScrollToLatestRef.current || shouldAutoFollowRef.current)) {
+      latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      forceScrollToLatestRef.current = false;
+      setShowLatestMessage(false);
+    } else setShowLatestMessage(true);
   }, [askingAgent, conversation.length]);
+  function handleChatScroll() {
+    const container = chatScrollRef.current;
+    if (!container) return;
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 56;
+    shouldAutoFollowRef.current = nearBottom;
+    if (nearBottom) setShowLatestMessage(false);
+  }
+  function scrollToLatestMessage() {
+    forceScrollToLatestRef.current = true;
+    shouldAutoFollowRef.current = true;
+    const container = chatScrollRef.current;
+    if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    else latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    setShowLatestMessage(false);
+  }
   async function startAnalysis() {
     if (!uploadedFiles.length || running) return;
     setRunning(true);
@@ -214,6 +238,8 @@ export function TenderAgentWorkspace() {
     }
     setAskingAgent(true);
     setError("");
+    forceScrollToLatestRef.current = true;
+    shouldAutoFollowRef.current = true;
     setConversation((messages) => [
       ...messages,
       { role: "user", content: enteredQuestion },
@@ -305,7 +331,7 @@ export function TenderAgentWorkspace() {
           </p>
         </div>
         <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+          <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
             <div className="flex items-center gap-2">
               <FileSearch size={16} />
               <h2 className="font-medium">招标材料输入</h2>
@@ -341,23 +367,8 @@ export function TenderAgentWorkspace() {
             {result && (
               <div className="mt-6 border-t border-black/5 pt-5">
                 <p className="text-sm font-medium">继续询问 Agent</p>
-                <textarea
-                  value={task}
-                  onChange={(event) => setTask(event.target.value)}
-                  placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
-                  className="mt-3 min-h-24 w-full rounded-xl border border-black/10 bg-[#f7f8f9] p-3 text-xs leading-5 outline-none focus:border-black/30"
-                />
-                <button
-                  onClick={askAgent}
-                  type="button"
-                  disabled={running || askingAgent || !task.trim()}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
-                >
-                  <Sparkles size={16} />
-                  {askingAgent ? "Agent 正在分析…" : "发送"}
-                </button>
                 {(conversation.length > 0 || askingAgent) && (
-                  <div ref={chatScrollRef} className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto border-t border-black/5 pt-4 pr-1 text-xs leading-6">
+                  <div ref={chatScrollRef} onScroll={handleChatScroll} className="tender-chat-scroll mt-3 max-h-[min(34rem,calc(100vh-27rem))] space-y-3 overflow-y-auto overscroll-contain border-y border-black/5 py-4 pr-2 text-xs leading-6">
                     {conversation.map((message, index) => (
                       <div
                         key={`${message.role}-${index}`}
@@ -378,6 +389,32 @@ export function TenderAgentWorkspace() {
                     <div ref={latestMessageRef} aria-hidden="true" />
                   </div>
                 )}
+                {showLatestMessage && (
+                  <button
+                    type="button"
+                    onClick={scrollToLatestMessage}
+                    className="mt-3 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-sm"
+                  >
+                    ↓ 查看最新消息
+                  </button>
+                )}
+                <div className="mt-3 shrink-0">
+                  <textarea
+                    value={task}
+                    onChange={(event) => setTask(event.target.value)}
+                    placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
+                    className="min-h-24 w-full rounded-xl border border-black/10 bg-[#f7f8f9] p-3 text-xs leading-5 outline-none focus:border-black/30"
+                  />
+                  <button
+                    onClick={askAgent}
+                    type="button"
+                    disabled={running || askingAgent || !task.trim()}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
+                  >
+                    <Sparkles size={16} />
+                    {askingAgent ? "Agent 正在分析…" : "发送"}
+                  </button>
+                </div>
               </div>
             )}
             <p className="mt-5 text-center text-xs text-neutral-500">

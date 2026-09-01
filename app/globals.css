@@ -70,3 +70,21 @@ a {
   font-weight: 600;
   color: #5f6874;
 }
+
+.tender-chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.tender-chat-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tender-chat-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.tender-chat-scroll:hover::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+}
