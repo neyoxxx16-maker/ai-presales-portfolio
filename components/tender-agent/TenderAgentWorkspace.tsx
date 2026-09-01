@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -75,7 +75,7 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
     </span>
   );
 }
-function Evidence({ sources }: { sources: TenderSource[] }) {
+function Evidence({ sources, judgment }: { sources: TenderSource[]; judgment?: string }) {
   return (
     <details className="mt-3 text-xs">
       <summary className="cursor-pointer text-neutral-500">
@@ -88,17 +88,18 @@ function Evidence({ sources }: { sources: TenderSource[] }) {
               key={`${source.id}-${source.location}`}
               className="rounded-xl border border-black/5 bg-white px-3 py-2"
             >
-              <p className="font-medium text-neutral-700">{source.title}</p>
+              <p className="font-medium text-neutral-700">
+                来源：{source.sourceFile || source.documentName || source.title}
+                {source.pageNumber ?? source.page ? ` · 第 ${source.pageNumber ?? source.page} 页` : source.category === "招标文件" ? " · 页码未定位" : ""}
+              </p>
               <p className="mt-1 text-[11px] leading-5 text-neutral-500">
-                {source.excerpt}
+                原文：“{source.quote || source.excerpt}”
               </p>
               <p className="mt-1 text-[10px] text-neutral-400">
-                来源类型：{source.category} · Evidence ID：{source.id}
-                {source.documentName ? ` · ${source.documentName}` : ""}
-                {source.page ? ` · 第 ${source.page} 页` : ""}
+                判断来源：{source.category}
                 {source.chunkId ? ` · 片段 ${source.chunkId}` : ""}
-                {!source.documentName && source.category === "招标文件" ? ` · ${source.location}` : ""}
               </p>
+              {judgment && <p className="mt-1 text-[11px] leading-5 text-neutral-600">判断：{judgment}</p>}
             </div>
           ))
         ) : (
@@ -162,6 +163,16 @@ export function TenderAgentWorkspace() {
   const [traceOpen, setTraceOpen] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
+  const [askingAgent, setAskingAgent] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!askingAgent && !conversation.length) return;
+    const container = chatScrollRef.current;
+    if (container)
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    else latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [askingAgent, conversation.length]);
   async function startAnalysis() {
     if (!uploadedFiles.length || running) return;
     setRunning(true);
@@ -195,14 +206,19 @@ export function TenderAgentWorkspace() {
       setError("请先完成投标分析后再继续询问。");
       return;
     }
-    if (running) return;
+    if (running || askingAgent) return;
     const enteredQuestion = task.trim();
     if (!enteredQuestion) {
       setError("请输入需要继续询问的问题。");
       return;
     }
-    setRunning(true);
+    setAskingAgent(true);
     setError("");
+    setConversation((messages) => [
+      ...messages,
+      { role: "user", content: enteredQuestion },
+    ]);
+    setTask("");
     try {
       const response = await fetch("/api/tender-agent", {
         method: "POST",
@@ -222,14 +238,12 @@ export function TenderAgentWorkspace() {
         throw new Error(data.message || "AI 问答未完成。");
       setConversation((messages) => [
         ...messages,
-        { role: "user", content: enteredQuestion },
         { role: "assistant", content: data.answer! },
       ]);
-      setTask("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI 分析未完成。");
     } finally {
-      setRunning(false);
+      setAskingAgent(false);
     }
   }
   function toggleReview(id: string) {
@@ -336,14 +350,14 @@ export function TenderAgentWorkspace() {
                 <button
                   onClick={askAgent}
                   type="button"
-                  disabled={running || !task.trim()}
+                  disabled={running || askingAgent || !task.trim()}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
                 >
                   <Sparkles size={16} />
-                  {running ? "回答中…" : "发送"}
+                  {askingAgent ? "Agent 正在分析…" : "发送"}
                 </button>
-                {conversation.length > 0 && (
-                  <div className="mt-4 space-y-3 border-t border-black/5 pt-4 text-xs leading-6">
+                {(conversation.length > 0 || askingAgent) && (
+                  <div ref={chatScrollRef} className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto border-t border-black/5 pt-4 pr-1 text-xs leading-6">
                     {conversation.map((message, index) => (
                       <div
                         key={`${message.role}-${index}`}
@@ -355,6 +369,13 @@ export function TenderAgentWorkspace() {
                         <div className="mt-1"><MarkdownText value={message.content} /></div>
                       </div>
                     ))}
+                    {askingAgent && (
+                      <div className="rounded-xl bg-[#f7ffe8] p-3 text-neutral-800">
+                        <p className="font-medium">AI</p>
+                        <p className="mt-1 flex items-center gap-2"><LoaderCircle className="animate-spin" size={14} />Agent 正在分析…</p>
+                      </div>
+                    )}
+                    <div ref={latestMessageRef} aria-hidden="true" />
                   </div>
                 )}
               </div>
@@ -728,20 +749,20 @@ function Overview({
   const materialGaps = result.matches.filter(
     (item) => item.status === "MISSING_EVIDENCE" || (item.status === "PENDING" && item.mandatory),
   );
-  const fields = [
-    ["采购人", info.purchaser],
-    ["预算 / 限价", info.budget],
-    ["投标截止", info.deadline],
-    ["建设周期", info.deliveryPeriod],
-    ["采购方式", info.procurementMethod],
-    ["交付地点", info.location],
+  const fields: Array<[string, string, TenderSource | undefined]> = [
+    ["采购人", info.purchaser, info.evidence?.purchaser],
+    ["预算 / 限价", info.maxPrice !== "待确认" ? info.maxPrice : info.budget, info.evidence?.maxPrice ?? info.evidence?.budget],
+    ["投标截止", info.deadline, info.evidence?.deadline],
+    ["建设周期", info.deliveryPeriod, info.evidence?.deliveryPeriod],
+    ["采购方式", info.procurementMethod, undefined],
+    ["交付地点", info.location, undefined],
   ];
   return (
     <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
       <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
         <p className="text-sm font-medium">项目基本信息</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {fields.map(([label, value]) => (
+          {fields.map(([label, value, source]) => (
             <div key={label} className="rounded-2xl bg-[#f7f8f9] p-3">
               <p className="text-[11px] text-neutral-400">{label}</p>
               <p className="mt-1 text-sm leading-6 text-neutral-700">
@@ -749,6 +770,7 @@ function Overview({
                   ? "未提取到"
                   : value}
               </p>
+              {source && <Evidence sources={[source]} />}
             </div>
           ))}
         </div>
@@ -987,7 +1009,7 @@ function RequirementList({
                 </p>
               </div>
             </div>
-            <Evidence sources={match.evidence} />
+            <Evidence sources={match.evidence} judgment={match.reason} />
             <button
               onClick={() => onToggleReview(match.requirementId)}
               className={`mt-3 rounded-full px-3 py-1.5 text-xs font-medium ${reviewedIds.includes(match.requirementId) ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
@@ -1044,7 +1066,7 @@ function ScoringView({ result }: { result: TenderAgentResult }) {
               置信度：{item.confidence === "high" ? "高" : item.confidence === "medium" ? "中" : "低"}
               {item.manualReviewRequired ? " · 需人工复核" : ""}
             </p>
-            <Evidence sources={[...item.bidEvidence, ...item.companyEvidence]} />
+            <Evidence sources={[...item.bidEvidence, ...item.companyEvidence]} judgment={item.reason} />
           </article>
         ))}
         {!result.scoringAnalysis.length && (

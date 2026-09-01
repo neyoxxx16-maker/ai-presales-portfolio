@@ -14,13 +14,21 @@ const source = (
   excerpt: string,
   line: number,
   documentName?: string,
+  pageNumber?: number,
 ): TenderSource => ({
   id,
   title: documentName || title,
   excerpt,
-  location: `${documentName || "招标文件"}第 ${line} 行`,
+  quote: excerpt,
+  sourceFile: documentName || title,
+  pageNumber,
+  location: pageNumber
+    ? `${documentName || title} · 第 ${pageNumber} 页`
+    : `${documentName || title} · 页码未定位`,
   category: "招标文件",
-  documentName,
+  documentName: documentName || title,
+  chunkId: `${id}-L${line}`,
+  page: pageNumber,
 });
 const unavailable = "待确认";
 const sectionType = (value: string): TenderSectionType =>
@@ -72,7 +80,7 @@ const stripNumber = (line: string) =>
     )
     .trim();
 const excluded = (type: TenderSectionType) =>
-  type === "TEMPLATE" || type === "LEGAL" || type === "BID_INVALID";
+  type === "TEMPLATE" || type === "LEGAL";
 const scoringHeader = (value: string) =>
   /^(?:序号|评分项(?:目|因素)?|评分标准|评分|得分|分值|打分方法|备注|评审内容|满分)$/
     .test(value.replace(/[：:|｜\s]/g, ""));
@@ -123,6 +131,7 @@ function requirementCategory(
   type: TenderSectionType,
   body: string,
 ): TenderRequirement["category"] {
+  if (type === "BID_INVALID") return "business";
   if (type === "DELIVERY") return "delivery";
   if (type === "AFTER_SALES") return "after-sales";
   if (type === "BUSINESS") return "business";
@@ -145,26 +154,35 @@ export function parseTenderDocument(
   if (!content || content.length < 8) throw new Error("invalid_document");
   if (content.length > 120000) throw new Error("document_too_large");
   let currentDocumentName: string | undefined;
+  let currentPageNumber: number | undefined;
   const rawLines = content.split("\n").flatMap((text, index) => {
     const marker = text.trim().match(/^\[\[SOURCE:(.+)\]\]$/);
     if (marker) {
       currentDocumentName = marker[1].trim();
+      currentPageNumber = undefined;
+      return [];
+    }
+    const pageMarker = text.trim().match(/^\[\[PAGE:(\d+)\]\]$/);
+    if (pageMarker) {
+      currentPageNumber = Number(pageMarker[1]);
       return [];
     }
     const trimmed = text.trim();
     return trimmed
-      ? [{ text: trimmed, line: index + 1, documentName: currentDocumentName }]
+      ? [{ text: trimmed, line: index + 1, documentName: currentDocumentName, pageNumber: currentPageNumber }]
       : [];
   });
   const documentNameByLine = new Map(
     rawLines.map((item) => [item.line, item.documentName]),
   );
+  const pageNumberByLine = new Map(rawLines.map((item) => [item.line, item.pageNumber]));
   const sections: TenderSection[] = [];
   let current: TenderSection = {
     type: "OTHER",
     title: "未分类内容",
     startLine: 1,
     content: [],
+    lineNumbers: [],
   };
   for (const item of rawLines) {
     if (heading(item.text)) {
@@ -174,8 +192,12 @@ export function parseTenderDocument(
         title: item.text,
         startLine: item.line,
         content: [],
+        lineNumbers: [],
       };
-    } else current.content.push(item.text);
+    } else {
+      current.content.push(item.text);
+      current.lineNumbers?.push(item.line);
+    }
   }
   if (current.content.length) sections.push(current);
   // OCR documents frequently contain usable paragraphs but no reliable numbered headings.
@@ -186,6 +208,7 @@ export function parseTenderDocument(
   if (!hasStandardHeadings) {
     const fallback: TenderSection[] = [];
     let buffer: string[] = [];
+    let lineNumbers: number[] = [];
     let startLine = 1;
     const flush = () => {
       if (buffer.length)
@@ -194,20 +217,42 @@ export function parseTenderDocument(
           title: `正文片段 ${fallback.length + 1}`,
           startLine,
           content: buffer,
+          lineNumbers,
         });
       buffer = [];
+      lineNumbers = [];
     };
     for (const item of rawLines) {
       if (!buffer.length) startLine = item.line;
       if (buffer.join("\n").length + item.text.length > 700) flush();
       buffer.push(item.text);
+      lineNumbers.push(item.line);
     }
     flush();
     sections.splice(0, sections.length, ...fallback);
   }
   const typedLines = sections.flatMap((section) =>
-    section.content.map((text) => ({ text, type: section.type })),
+    section.content.map((text, offset) => ({
+      text,
+      type: section.type,
+      line: section.lineNumbers?.[offset] ?? section.startLine + offset + 1,
+    })),
   );
+  const sourceForLabels = (labels: string[]) => {
+    const line = typedLines.find((item) =>
+      labels.some((label) => new RegExp(`${label}[：:]|^${label}$`, "i").test(item.text)),
+    );
+    return line
+      ? source(
+          `DOC-${line.line}`,
+          name,
+          line.text,
+          line.line,
+          documentNameByLine.get(line.line),
+          pageNumberByLine.get(line.line),
+        )
+      : undefined;
+  };
   const projectInfo: TenderProjectInfo = {
     projectName: valueFrom(typedLines, ["项目名称", "采购项目名称"]),
     projectCode: valueFrom(typedLines, ["项目编号", "采购编号", "招标编号"]),
@@ -227,6 +272,15 @@ export function parseTenderDocument(
     ]),
     location: valueFrom(typedLines, ["交付地点", "项目地点", "服务地点"]),
     targetSummary: valueFrom(typedLines, ["采购标的", "采购内容", "项目概况"]),
+    evidence: {
+      purchaser: sourceForLabels(["采购人", "采购单位"]),
+      budget: sourceForLabels(["项目预算", "采购预算", "预算金额", "预算"]),
+      maxPrice: sourceForLabels(["最高限价", "最高投标限价"]),
+      deadline: sourceForLabels(["投标截止时间", "递交投标文件截止时间"]),
+      bidOpenTime: sourceForLabels(["开标时间"]),
+      deliveryPeriod: sourceForLabels(["服务期限", "建设周期", "交付周期", "服务期"]),
+      targetSummary: sourceForLabels(["采购标的", "采购内容", "项目概况"]),
+    },
   };
   const requirements: TenderRequirement[] = [];
   const scoringRules: TenderDocument["scoringRules"] = [];
@@ -236,7 +290,7 @@ export function parseTenderDocument(
     for (let offset = 0; offset < section.content.length; offset++) {
       const original = section.content[offset];
       const body = stripNumber(original);
-      const line = section.startLine + offset + 1;
+      const line = section.lineNumbers?.[offset] ?? section.startLine + offset + 1;
       if (section.type === "SCORING") {
         const parsedRule = structuredScoringRule(body);
         if (parsedRule)
@@ -249,36 +303,42 @@ export function parseTenderDocument(
               body,
               line,
               documentNameByLine.get(line),
+              pageNumberByLine.get(line),
             ),
           });
       }
       const inferredType: TenderSectionType =
-        section.type === "OTHER"
-          ? /资格|资质|投标人|供应商|业绩|项目经理|信用|财务/.test(body)
-            ? "QUALIFICATION"
-            : /评分|得分|分值/.test(body)
-              ? "SCORING"
-              : /交付|实施|验收|工期|服务期/.test(body)
-                ? "DELIVERY"
-                : /售后|运维|培训|质保/.test(body)
-                  ? "AFTER_SALES"
-                  : /技术|系统|平台|参数|功能|性能|支持|兼容/.test(body)
-                    ? "TECHNICAL"
-                    : "OTHER"
-          : section.type;
+        section.type === "SCORING" && /废标|无效投标|否决投标/.test(body)
+          ? "BID_INVALID"
+          : section.type === "OTHER"
+            ? /资格|资质|投标人|供应商|业绩|项目经理|信用|财务/.test(body)
+              ? "QUALIFICATION"
+              : /评分|得分|分值/.test(body)
+                ? "SCORING"
+                : /交付|实施|验收|工期|服务期/.test(body)
+                  ? "DELIVERY"
+                  : /售后|运维|培训|质保/.test(body)
+                    ? "AFTER_SALES"
+                    : /技术|系统|平台|参数|功能|性能|支持|兼容/.test(body)
+                      ? "TECHNICAL"
+                      : /(?:演示要求|现场演示|功能演示)/i.test(body)
+                        ? "BUSINESS"
+                        : "OTHER"
+            : section.type;
       const candidateSection = [
         "QUALIFICATION",
         "TECHNICAL",
         "BUSINESS",
         "DELIVERY",
         "AFTER_SALES",
+        "BID_INVALID",
       ].includes(inferredType);
       const requirementCue =
-        /应|须|需|支持|提供|完成|不少于|具备|采用|满足|不得|兼容|配置|培训|服务|验收/.test(
+        /应|须|需|支持|提供|完成|不少于|具备|采用|满足|不得|兼容|配置|培训|服务|验收|无效|废标|否决|演示/.test(
           body,
         );
       if (candidateSection && requirementCue && body.length >= 5) {
-        const mandatory = /硬性|须|必须|不得|不少于/.test(body);
+        const mandatory = /硬性|须|必须|不得|不少于|▲|★/.test(body);
         const score = body.match(/(?:技术)?评分\s*(\d+(?:\.\d+)?)\s*分/)?.[1];
         requirements.push({
           id: `REQ-${String(requirements.length + 1).padStart(2, "0")}`,
@@ -292,6 +352,7 @@ export function parseTenderDocument(
             body,
             line,
             documentNameByLine.get(line),
+            pageNumberByLine.get(line),
           ),
         });
         if (inferredType === "DELIVERY" || inferredType === "AFTER_SALES")

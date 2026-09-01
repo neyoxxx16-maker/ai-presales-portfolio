@@ -18,6 +18,10 @@ export type TenderSource = {
   id: string;
   title: string;
   excerpt: string;
+  /** User-facing source metadata. `excerpt` is retained for backward compatibility. */
+  sourceFile?: string;
+  pageNumber?: number;
+  quote?: string;
   location: string;
   category: "招标文件" | "演示企业资料" | "真实企业资料" | "外部公开信息";
   documentName?: string;
@@ -54,12 +58,14 @@ export type TenderProjectInfo = {
   deliveryPeriod: string;
   location: string;
   targetSummary: string;
+  evidence?: Partial<Record<keyof Omit<TenderProjectInfo, "evidence">, TenderSource>>;
 };
 export type TenderSection = {
   type: TenderSectionType;
   title: string;
   startLine: number;
   content: string[];
+  lineNumbers?: number[];
 };
 export type TenderDocument = {
   name: string;
@@ -305,6 +311,8 @@ export type ParsedBidDocument = {
   sectionCount: number;
   chunkingMethod: "heading" | "fallback";
   pageCount?: number;
+  /** Text kept per original PDF/OCR page so citations never infer a page from character offsets. */
+  pages?: Array<{ pageNumber: number; text: string }>;
   parseMethod: "plain_text" | "docx_mammoth" | "pdf_text" | "ocr";
   status: BidDocumentParseStatus;
   warning?: string;
@@ -349,9 +357,12 @@ export type CompanyEvidenceChunk = {
   chunkId: string;
   documentId: string;
   content: string;
+  sourceFile: string;
+  quote: string;
   category: CompanyDocumentCategory;
   sectionTitle: string;
   page?: number;
+  pageNumber?: number;
   metadata: Pick<
     CompanyDocument,
     "fileName" | "validFrom" | "validTo" | "issuer" | "tags" | "parseMethod"
@@ -364,11 +375,13 @@ export type RetrievedCompanyEvidence = {
   documentId: string;
   chunkId: string;
   content: string;
+  quote: string;
   category: CompanyDocumentCategory;
   score: number;
   retrievalMethod: RetrievalMethod;
   sourceFile: string;
   page?: number;
+  pageNumber?: number;
   sectionTitle: string;
   validFrom?: string;
   validTo?: string;

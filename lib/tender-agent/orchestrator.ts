@@ -85,6 +85,7 @@ function makeMatch(
   reason: string,
   evidence: KnowledgeRecord[],
 ): RequirementMatch {
+  const sources = [requirement.source, ...evidence.map((item) => item.source)];
   return {
     requirementId: requirement.id,
     requirement: requirement.requirement,
@@ -97,7 +98,8 @@ function makeMatch(
     reason,
     evidenceIds: evidence.map((item) => item.evidenceId),
     sourceFiles: Array.from(new Set(evidence.map((item) => item.sourceFile))),
-    evidence: evidence.map((item) => item.source),
+    // Every judgment keeps the original tender clause first, followed by company evidence.
+    evidence: sources,
     suggestedAction: action(status),
     mandatory: requirement.mandatory,
     scoreWeight: requirement.scoreWeight,
@@ -213,11 +215,14 @@ function workspaceRecord(
       id: item.evidenceId,
       title: `${item.sourceFile} · ${item.sectionTitle}`,
       excerpt: item.content.slice(0, 160),
+      quote: item.content.slice(0, 160),
+      sourceFile: item.sourceFile,
+      pageNumber: item.pageNumber ?? item.page,
       location: `本地资料库 · ${item.sectionTitle}${item.page ? ` · 第 ${item.page} 页` : ""}`,
       category: "真实企业资料",
       documentName: item.sourceFile,
       chunkId: item.chunkId,
-      page: item.page,
+      page: item.pageNumber ?? item.page,
       score: item.score,
       retrievalMethod: item.retrievalMethod,
     },
@@ -899,11 +904,16 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
       state.parsed = {
         ...state.parsed,
         text: ocr.text,
-        canonicalDocumentText: ocr.text,
+        canonicalDocumentText: ocr.pageResults.length
+          ? ocr.pageResults
+              .map((page) => `[[PAGE:${page.page}]]\n${page.text}`)
+              .join("\n\n")
+          : ocr.text,
         characterCount: ocr.text.length,
         sectionCount: 0,
         chunkingMethod: "fallback",
         pageCount: ocr.pageResults.length || state.parsed.pageCount,
+        pages: ocr.pageResults.map((page) => ({ pageNumber: page.page, text: page.text })),
         parseMethod: "ocr",
         status: "PARSED",
         warning: ocr.warnings.join(" "),
@@ -1387,6 +1397,39 @@ export async function answerTenderQuestion(
   question: string,
   conversation: Array<{ role: "user" | "assistant"; content: string }> = [],
 ): Promise<{ answer: string; status: "completed" | "failed" }> {
+  const evidenceQuestion = /资质|资格|条件|哪一页|第几页|页码|原文|依据|在哪/.test(question);
+  const riskIndex = question.match(/第\s*([一二三四五六七八九十\d]+)\s*个风险/)?.[1];
+  const numberFromChinese = (value?: string) => {
+    if (!value) return undefined;
+    const digits = Number(value);
+    if (Number.isFinite(digits) && digits > 0) return digits;
+    return "一二三四五六七八九十".indexOf(value) + 1 || undefined;
+  };
+  const referencedRequirementIds = riskIndex
+    ? result.risks[numberFromChinese(riskIndex)! - 1]?.relatedRequirementIds ?? []
+    : [];
+  const relevantMatches = result.matches.filter((item) =>
+    referencedRequirementIds.length
+      ? referencedRequirementIds.includes(item.requirementId)
+      : /资质|资格/.test(question)
+        ? item.category === "资格审查"
+        : true,
+  ).slice(0, 8);
+  const tenderEvidence = relevantMatches.flatMap((item) =>
+    item.evidence
+      .filter((source) => source.category === "招标文件")
+      .map((source) => ({
+        requirement: item.requirement,
+        judgment: item.reason,
+        sourceFile: source.sourceFile || source.documentName || source.title,
+        pageNumber: source.pageNumber ?? source.page,
+        quote: source.quote || source.excerpt,
+        chunkId: source.chunkId,
+      })),
+  );
+  const evidenceAppendix = evidenceQuestion && tenderEvidence.length
+    ? `\n\n原文证据：\n${tenderEvidence.map((item) => `- 条件：${item.requirement}\n  文件：${item.sourceFile}\n  页码：${item.pageNumber ? `第 ${item.pageNumber} 页` : "页码未定位（解析文本未保留可验证页边界）"}\n  原文：“${item.quote}”\n  判断：${item.judgment}${item.chunkId ? `\n  片段：${item.chunkId}` : ""}`).join("\n")}`
+    : "";
   const context = {
     recommendation: result.analysisSummary.recommendation,
     finalAnswer: result.finalAnswer,
@@ -1395,13 +1438,18 @@ export async function answerTenderQuestion(
       status: item.status,
       risk: item.risk,
       reason: item.reason,
-      sources: item.evidence.map(
-        (source) => source.documentName || source.title,
-      ),
+      sources: item.evidence.map((source) => ({
+        sourceFile: source.sourceFile || source.documentName || source.title,
+        pageNumber: source.pageNumber ?? source.page,
+        quote: source.quote || source.excerpt,
+        chunkId: source.chunkId,
+      })),
     })),
     risks: result.risks.slice(0, 8),
     conversation: conversation.slice(-6),
   };
+  if (!process.env.DEEPSEEK_API_KEY && evidenceAppendix)
+    return { answer: evidenceAppendix.trim(), status: "completed" };
   if (!process.env.DEEPSEEK_API_KEY)
     return {
       answer:
@@ -1424,14 +1472,14 @@ export async function answerTenderQuestion(
             {
               role: "system",
               content:
-                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
+                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。当用户问资质、条件、原文、依据或哪一页时，必须逐项给出“文件、页码、原文、判断”；pageNumber 缺失时只能写“页码未定位”及给定原因，绝不能猜测页码。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
             },
             {
               role: "user",
               content: JSON.stringify({ question, analysis: context }),
             },
           ],
-          max_tokens: 1000,
+          max_tokens: 1800,
           thinking: { type: "disabled" },
         }),
         signal: AbortSignal.timeout(20000),
@@ -1448,7 +1496,7 @@ export async function answerTenderQuestion(
     };
     const answer = data.choices?.[0]?.message?.content?.trim();
     return answer
-      ? { answer, status: "completed" }
+      ? { answer: `${answer}${evidenceAppendix}`, status: "completed" }
       : {
           answer:
             "AI 问答生成失败：DeepSeek 未返回有效回答。现有规则分析未被清空。",
