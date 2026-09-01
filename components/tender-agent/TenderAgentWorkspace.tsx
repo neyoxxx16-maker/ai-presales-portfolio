@@ -1194,6 +1194,19 @@ function ResponseView({ result }: { result: TenderAgentResult }) {
           ))}
         </article>
       )}
+      {result.externalVerification.projectConflicts?.length ? (
+        <article className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-medium text-amber-900">发现外部信息冲突</p>
+          {result.externalVerification.projectConflicts.map((item, index) => (
+            <div key={`${item.url}-${index}`} className="mt-2 text-xs leading-6 text-amber-900">
+              <p>冲突字段：{item.field}</p>
+              <p>文件原文：{item.fileValue}（{item.fileSource}）</p>
+              <p>联网来源：{item.externalValue}</p>
+              <a className="underline" href={item.url} target="_blank" rel="noreferrer">{item.title} · 来源链接</a>
+            </div>
+          ))}
+        </article>
+      ) : null}
       <div className="mt-3 space-y-3">
         {result.solution.sections.map((item) => (
           <article key={item.title} className="rounded-2xl bg-[#f7f8f9] p-4">

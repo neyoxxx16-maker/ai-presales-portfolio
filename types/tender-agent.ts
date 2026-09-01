@@ -392,6 +392,15 @@ export type ExternalVerification = {
   status: "NOT_CONFIGURED" | "NOT_EXECUTED" | "COMPLETED" | "FAILED";
   query?: string;
   error?: string;
+  projectBound?: boolean;
+  projectConflicts?: Array<{
+    field: string;
+    fileValue: string;
+    fileSource: string;
+    externalValue: string;
+    title: string;
+    url: string;
+  }>;
   results: Array<{
     title: string;
     url: string;
@@ -401,5 +410,7 @@ export type ExternalVerification = {
     snippet: string;
     provider: string;
     confidence: "high" | "medium" | "low";
+    projectMatch?: "MATCHED" | "UNCONFIRMED" | "CONFLICT";
+    matchReasons?: string[];
   }>;
 };

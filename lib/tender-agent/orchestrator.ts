@@ -1392,6 +1392,37 @@ export async function runTenderAgent(
   };
 }
 
+const knownProjectValue = (value: string) => value && value !== "待确认" && value !== "资料未提供";
+const normalizeProjectValue = (value: string) => value.toLowerCase().replace(/[\s，。；：:（）()、"'“”]/g, "");
+function projectWebQuery(document: TenderAgentResult["document"], fallback: string) {
+  const info = document.projectInfo;
+  if (knownProjectValue(info.projectCode)) return `"${info.projectCode}"`;
+  if (knownProjectValue(info.projectName) && knownProjectValue(info.purchaser)) return `${info.projectName} ${info.purchaser} 招标 采购`;
+  if (knownProjectValue(info.projectName)) return `${info.projectName} 招标 采购`;
+  return fallback;
+}
+function validateProjectWebResults(verification: TenderAgentResult["externalVerification"], document: TenderAgentResult["document"]) {
+  const info = document.projectInfo;
+  const projectCode = knownProjectValue(info.projectCode) ? normalizeProjectValue(info.projectCode) : "";
+  const projectName = knownProjectValue(info.projectName) ? normalizeProjectValue(info.projectName) : "";
+  const purchaser = knownProjectValue(info.purchaser) ? normalizeProjectValue(info.purchaser) : "";
+  const deadline = knownProjectValue(info.deadline) ? info.deadline.match(/\d{4}-\d{1,2}-\d{1,2}/)?.[0] : undefined;
+  const conflicts: NonNullable<TenderAgentResult["externalVerification"]["projectConflicts"]> = [];
+  const results = verification.results.map((item) => {
+    const content = normalizeProjectValue(`${item.title} ${item.snippet}`);
+    const codeMatch = Boolean(projectCode && content.includes(projectCode));
+    const nameMatch = Boolean(projectName && (content.includes(projectName) || projectName.includes(content.slice(0, Math.min(content.length, projectName.length)))));
+    const purchaserMatch = Boolean(purchaser && content.includes(purchaser));
+    const dateMatch = Boolean(deadline && `${item.title} ${item.snippet}`.includes(deadline));
+    const reasons = [codeMatch ? "项目编号一致" : "", nameMatch ? "项目名称一致" : "", purchaserMatch ? "采购人一致" : "", dateMatch ? "关键日期一致" : ""].filter(Boolean);
+    const matched = (codeMatch && (nameMatch || purchaserMatch)) || (nameMatch && purchaserMatch);
+    const publishedAfterDeadline = Boolean(deadline && item.publishedAt && item.publishedAt > deadline);
+    if (publishedAfterDeadline) conflicts.push({ field: "日期", fileValue: `投标截止时间：${info.deadline}`, fileSource: info.evidence?.deadline?.sourceFile || document.name, externalValue: `页面发布日期：${item.publishedAt}`, title: item.title, url: item.url });
+    return { ...item, projectMatch: publishedAfterDeadline ? "CONFLICT" as const : matched ? "MATCHED" as const : "UNCONFIRMED" as const, matchReasons: reasons };
+  });
+  return { ...verification, projectBound: true, projectConflicts: conflicts, results };
+}
+
 export async function answerTenderQuestion(
   result: TenderAgentResult,
   question: string,
@@ -1402,13 +1433,18 @@ export async function answerTenderQuestion(
   const needsWebSearch = explicitWebRequest || (!localTenderQuestion && /最新|当前|现在|今日|最近|政策|市场信息|厂商信息|最新价格|外部公开信息/.test(question));
   const organization = question.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,}(?:大学|学院|公司|集团|官网)/)?.[0]?.replace(/官网$/, "");
   const topic = question.match(/采购公告|招标公告|采购|招标|政策|API 文档|文档|价格|市场信息/)?.[0];
+  const purchaser = result.document.projectInfo.purchaser;
+  const explicitlyDifferentOrganization = Boolean(organization && knownProjectValue(purchaser) && !normalizeProjectValue(purchaser).includes(normalizeProjectValue(organization)));
+  const projectBoundSearch = needsWebSearch && (localTenderQuestion || /当前项目|本项目|当前招标/.test(question)) && !explicitlyDifferentOrganization;
+  const genericQuery = `${organization ?? ""} ${topic ?? "公开信息"} ${/最新|当前|现在|今日|最近/.test(question) ? "最新" : ""}`.trim().slice(0, 100);
   const webQuery = needsWebSearch
-    ? `${organization ?? ""} ${topic ?? "公开信息"} ${/最新|当前|现在|今日|最近/.test(question) ? "最新" : ""}`.trim().slice(0, 100)
+    ? projectBoundSearch ? projectWebQuery(result.document, genericQuery) : genericQuery
     : undefined;
-  const webSearch = webQuery ? await externalSearch(webQuery) : undefined;
+  const searched = webQuery ? await externalSearch(webQuery) : undefined;
+  const webSearch = searched && projectBoundSearch ? validateProjectWebResults(searched, result.document) : searched;
   const webEvidence: TenderSource[] = (webSearch?.results ?? []).map((item, index) => ({
     id: `WEB-CHAT-${index + 1}`,
-    title: item.title,
+    title: projectBoundSearch && item.projectMatch !== "MATCHED" ? `未确认的外部参考信息：${item.title}` : item.title,
     sourceFile: item.domain,
     excerpt: item.snippet.slice(0, 320),
     quote: item.snippet.slice(0, 320),
@@ -1442,8 +1478,9 @@ export async function answerTenderQuestion(
         },
       }
     : undefined;
+  const confirmedWebResults = (webSearch?.results ?? []).filter((item) => !projectBoundSearch || item.projectMatch === "MATCHED");
   const webEvidenceAppendix = webSearch?.status === "COMPLETED"
-    ? `\n\n联网检索证据（Tavily，查询时间：${webSearch.results[0]?.retrievedAt ?? "—"}）：\n${webSearch.results.map((item) => `- 来源：${item.domain}\n  页面：${item.title}\n  发布日期：${item.publishedAt ?? "页面未提供明确发布日期"}\n  URL：${item.url}`).join("\n")}`
+    ? `\n\n${projectBoundSearch && !confirmedWebResults.length ? "联网结果未通过同项目校验，仅作为未确认的外部参考信息，不作为当前项目事实。" : "联网检索证据"}（Tavily，查询时间：${webSearch.results[0]?.retrievedAt ?? "—"}）：\n${webSearch.results.map((item) => `- 来源：${item.domain}\n  页面：${item.title}\n  项目校验：${item.projectMatch === "MATCHED" ? item.matchReasons?.join("、") || "已确认" : item.projectMatch === "CONFLICT" ? "发现外部信息冲突" : "未确认"}\n  发布日期：${item.publishedAt ?? "页面未提供明确发布日期"}\n  URL：${item.url}`).join("\n")}`
     : webSearch
       ? `\n\n联网检索失败（${webSearch.error ?? "unknown_error"}），本次回答仅基于当前招标文件和企业知识库。`
       : "";
