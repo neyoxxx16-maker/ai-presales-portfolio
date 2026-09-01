@@ -61,6 +61,8 @@ const createConversationId = () =>
     : `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const pendingValue = (value?: string) =>
   value && value !== "待确认" && value !== "资料未提供" ? value : "待确认";
+const hasConfirmedProjectValue = (value?: string) =>
+  Boolean(value && value !== "待确认" && value !== "资料未提供");
 function projectDetails(result?: TenderAgentResult, files: ParsedBidDocument[] = []) {
   const info = result?.document.projectInfo;
   return {
@@ -211,6 +213,9 @@ export function TenderAgentWorkspace() {
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyProjects, setHistoryProjects] = useState<ReturnType<typeof listTenderProjectSessions>>([]);
   const [historyHydrated, setHistoryHydrated] = useState(false);
+  const leftPanelRef = useRef<HTMLElement>(null);
+  const agentChatRef = useRef<HTMLDivElement>(null);
+  const agentInputRef = useRef<HTMLTextAreaElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const latestUserRef = useRef<HTMLDivElement>(null);
   const latestAssistantRef = useRef<HTMLDivElement>(null);
@@ -255,6 +260,17 @@ export function TenderAgentWorkspace() {
     if (container) container.scrollTo({ top: Math.max(0, (target?.offsetTop ?? 0) - container.offsetTop - 8), behavior: "smooth" });
     else target?.scrollIntoView({ behavior: "smooth", block: "start" });
     setShowLatestMessage(false);
+  }
+  function jumpToAgentChat() {
+    const chatSection = agentChatRef.current;
+    const leftPanel = leftPanelRef.current;
+    if (chatSection && leftPanel) {
+      const targetTop = chatSection.offsetTop - leftPanel.offsetTop - (leftPanel.clientHeight - chatSection.offsetHeight) / 2;
+      leftPanel.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+    } else {
+      chatSection?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    requestAnimationFrame(() => agentInputRef.current?.focus());
   }
   useEffect(() => {
     if (!historyHydrated || (!result && !storedFiles.length && !conversation.length)) return;
@@ -515,7 +531,7 @@ export function TenderAgentWorkspace() {
           </p>
         </div>
         <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
+          <aside ref={leftPanelRef} className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <FileSearch size={16} />
@@ -563,9 +579,14 @@ export function TenderAgentWorkspace() {
                 {running ? "分析中…" : analysisStale ? "重新分析" : "开始投标分析"}
               </button>
             </div>
-            {result && (
-              <div className="mt-6 border-t border-black/5 pt-5">
-                <p className="text-sm font-medium">继续询问 Agent</p>
+            <div className="mt-6 border-t border-black/5 pt-5">
+                <button
+                  type="button"
+                  onClick={jumpToAgentChat}
+                  className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/30"
+                >
+                  继续询问 Agent <ChevronDown size={15} aria-hidden="true" />
+                </button>
                 {(conversation.length > 0 || askingAgent) && (
                   <div ref={chatScrollRef} onScroll={handleChatScroll} className="tender-chat-scroll mt-4 max-h-[min(34rem,calc(100vh-27rem))] space-y-3 overflow-y-auto overscroll-contain border-y border-black/5 py-4 pr-2 text-xs leading-6">
                     {conversation.map((message, index) => (
@@ -600,8 +621,9 @@ export function TenderAgentWorkspace() {
                     ↓ 查看最新消息
                   </button>
                 )}
-                <div className="mt-3 shrink-0">
+                <div ref={agentChatRef} id="agent-chat-section" className="mt-3 shrink-0">
                   <textarea
+                    ref={agentInputRef}
                     value={task}
                     onChange={(event) => setTask(event.target.value)}
                     placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
@@ -610,15 +632,14 @@ export function TenderAgentWorkspace() {
                   <button
                     onClick={askAgent}
                     type="button"
-                    disabled={running || askingAgent || !task.trim()}
+                    disabled={running || askingAgent || !result || !task.trim()}
                     className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
                   >
                     <Sparkles size={16} />
                     {askingAgent ? "Agent 正在分析…" : "发送"}
                   </button>
                 </div>
-              </div>
-            )}
+            </div>
             {!result && uploadedFiles.length > 0 && (
               <p className="mt-5 rounded-xl bg-[#f7f8f9] px-3 py-3 text-xs leading-5 text-neutral-500">
                 正在分析当前招标文件，完成后即可继续提问。
@@ -704,27 +725,35 @@ export function TenderAgentWorkspace() {
             </label>
             <div className="tender-chat-scroll mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
               {filteredHistoryProjects.map((project) => (
-                <article key={project.projectId} className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4 text-xs">
-                  <div className="flex items-start gap-3">
+                <article key={project.projectId} className="relative rounded-2xl border border-black/5 bg-[#f7f8f9] p-4 text-xs">
                     <button
                       type="button"
                       onClick={() => { const session = getTenderProjectSession(project.projectId); if (session) { restoreProjectSession(session); setHistoryOpen(false); } }}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="truncate font-medium text-neutral-900">{project.projectName}</p>
-                      <p className="mt-1 text-neutral-500">{project.projectNumber} · {project.purchaser}</p>
-                      <p className="mt-2 text-neutral-500">{project.files.length} 个文件 · {project.status === "completed" ? "已完成" : project.status === "needs_review" || project.status === "draft" ? "待补充" : project.status === "analyzing" ? "分析中" : "分析失败"}</p>
-                      <p className="mt-1 text-[11px] text-neutral-400">最后分析：{project.lastAnalyzedAt ? new Date(project.lastAnalyzedAt).toLocaleString("zh-CN") : "尚未分析"}</p>
-                    </button>
+                      aria-label={`打开项目 ${project.projectName}`}
+                      className="absolute inset-0 rounded-2xl transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/30"
+                    />
+                  <div className="relative pointer-events-none min-w-0 pr-9">
+                    <p className="truncate font-medium text-neutral-900">{project.projectName}</p>
+                    {(hasConfirmedProjectValue(project.projectNumber) || hasConfirmedProjectValue(project.purchaser)) && (
+                      <p className="mt-1 text-neutral-500">
+                        {hasConfirmedProjectValue(project.projectNumber) ? `项目编号：${project.projectNumber}` : "项目编号：待确认"}
+                        {" · "}
+                        {hasConfirmedProjectValue(project.purchaser) ? `采购人：${project.purchaser}` : "采购人：待确认"}
+                      </p>
+                    )}
+                    <p className="mt-2 text-neutral-500">{project.files.length} 个文件 · {project.status === "completed" ? "已完成" : project.status === "needs_review" || project.status === "draft" ? "待补充" : project.status === "analyzing" ? "分析中" : "分析失败"}</p>
+                    <p className="mt-1 text-[11px] text-neutral-400">
+                      {project.status === "analyzing" ? "正在分析…" : `最后分析：${project.lastAnalyzedAt ? new Date(project.lastAnalyzedAt).toLocaleString("zh-CN") : "尚未分析"}`}
+                    </p>
+                  </div>
                     <button
                       type="button"
                       onClick={() => deleteProject(project.projectId, project.projectName)}
                       aria-label={`删除 ${project.projectName}`}
-                      className="shrink-0 rounded-full p-2 text-neutral-400 hover:bg-white hover:text-red-700"
+                      className="absolute right-3 top-3 z-10 rounded-full p-2 text-neutral-400 hover:bg-white hover:text-red-700"
                     >
                       <Trash2 size={15} />
                     </button>
-                  </div>
                 </article>
               ))}
               {!filteredHistoryProjects.length && (
