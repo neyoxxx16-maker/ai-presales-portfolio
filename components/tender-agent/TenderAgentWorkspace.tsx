@@ -61,8 +61,8 @@ const createConversationId = () =>
     : `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const pendingValue = (value?: string) =>
   value && value !== "待确认" && value !== "资料未提供" ? value : "待确认";
-const hasConfirmedProjectValue = (value?: string) =>
-  Boolean(value && value !== "待确认" && value !== "资料未提供");
+const hasProjectMetadata = (projectNumber?: string, purchaser?: string) =>
+  Boolean(projectNumber?.trim() || purchaser?.trim());
 function projectDetails(result?: TenderAgentResult, files: ParsedBidDocument[] = []) {
   const info = result?.document.projectInfo;
   return {
@@ -734,11 +734,11 @@ export function TenderAgentWorkspace() {
                     />
                   <div className="relative pointer-events-none min-w-0 pr-9">
                     <p className="truncate font-medium text-neutral-900">{project.projectName}</p>
-                    {(hasConfirmedProjectValue(project.projectNumber) || hasConfirmedProjectValue(project.purchaser)) && (
+                    {hasProjectMetadata(project.projectNumber, project.purchaser) && (
                       <p className="mt-1 text-neutral-500">
-                        {hasConfirmedProjectValue(project.projectNumber) ? `项目编号：${project.projectNumber}` : "项目编号：待确认"}
+                        项目编号：{pendingValue(project.projectNumber)}
                         {" · "}
-                        {hasConfirmedProjectValue(project.purchaser) ? `采购人：${project.purchaser}` : "采购人：待确认"}
+                        采购人：{pendingValue(project.purchaser)}
                       </p>
                     )}
                     <p className="mt-2 text-neutral-500">{project.files.length} 个文件 · {project.status === "completed" ? "已完成" : project.status === "needs_review" || project.status === "draft" ? "待补充" : project.status === "analyzing" ? "分析中" : "分析失败"}</p>
