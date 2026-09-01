@@ -33,7 +33,12 @@ type Tab =
   | "scoring"
   | "response"
   | "library";
-type ConversationMessage = { role: "user" | "assistant"; content: string };
+type ConversationMessage = { role: "user" | "assistant"; content: string; sources?: TenderSource[] };
+type StoredTenderSession = { id: string; fileNames: string[]; result?: TenderAgentResult; conversation: ConversationMessage[]; updatedAt: string };
+const createAnalysisSessionId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `tender-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const statusLabel: Record<MatchStatus, string> = {
   PASS: "符合",
   PENDING: "待确认",
@@ -164,20 +169,26 @@ export function TenderAgentWorkspace() {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
   const [askingAgent, setAskingAgent] = useState(false);
+  const [searchingWeb, setSearchingWeb] = useState(false);
   const [showLatestMessage, setShowLatestMessage] = useState(false);
+  const [analysisSessionId, setAnalysisSessionId] = useState(createAnalysisSessionId);
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const latestMessageRef = useRef<HTMLDivElement>(null);
+  const latestUserRef = useRef<HTMLDivElement>(null);
+  const latestAssistantRef = useRef<HTMLDivElement>(null);
   const shouldAutoFollowRef = useRef(true);
   const forceScrollToLatestRef = useRef(false);
+  const scrollTargetRef = useRef<"user" | "assistant">("user");
+  const sessionsRef = useRef<Record<string, StoredTenderSession>>({});
   useEffect(() => {
     if (!askingAgent && !conversation.length) return;
     const container = chatScrollRef.current;
+    const target = scrollTargetRef.current === "assistant" ? latestAssistantRef.current : latestUserRef.current;
     if (container && (forceScrollToLatestRef.current || shouldAutoFollowRef.current)) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      container.scrollTo({ top: Math.max(0, (target?.offsetTop ?? 0) - container.offsetTop - 8), behavior: "smooth" });
       forceScrollToLatestRef.current = false;
       setShowLatestMessage(false);
     } else if (!container && (forceScrollToLatestRef.current || shouldAutoFollowRef.current)) {
-      latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
       forceScrollToLatestRef.current = false;
       setShowLatestMessage(false);
     } else setShowLatestMessage(true);
@@ -193,8 +204,23 @@ export function TenderAgentWorkspace() {
     forceScrollToLatestRef.current = true;
     shouldAutoFollowRef.current = true;
     const container = chatScrollRef.current;
-    if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    else latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const target = latestAssistantRef.current ?? latestUserRef.current;
+    if (container) container.scrollTo({ top: Math.max(0, (target?.offsetTop ?? 0) - container.offsetTop - 8), behavior: "smooth" });
+    else target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setShowLatestMessage(false);
+  }
+  useEffect(() => {
+    const session: StoredTenderSession = { id: analysisSessionId, fileNames: uploadedFiles.map((file) => file.name), result, conversation, updatedAt: new Date().toISOString() };
+    sessionsRef.current[analysisSessionId] = session;
+    try { sessionStorage.setItem("tender-agent-sessions", JSON.stringify(sessionsRef.current)); } catch { /* Storage is optional; request context remains session-scoped. */ }
+  }, [analysisSessionId, conversation, result, uploadedFiles]);
+  function beginNewSession() {
+    setAnalysisSessionId(createAnalysisSessionId());
+    setResult(undefined);
+    setConversation([]);
+    setTask("");
+    setAnalysisStale(false);
+    setReviewedIds([]);
     setShowLatestMessage(false);
   }
   async function startAnalysis() {
@@ -237,9 +263,11 @@ export function TenderAgentWorkspace() {
       return;
     }
     setAskingAgent(true);
+    setSearchingWeb(/最新|当前|现在|今日|最近|官网|公告|政策|市场信息|厂商信息|最新价格|外部公开信息|请联网|联网核验|帮我搜索|查询官网|核验来源|给我链接|来源\s*url/i.test(enteredQuestion));
     setError("");
     forceScrollToLatestRef.current = true;
     shouldAutoFollowRef.current = true;
+    scrollTargetRef.current = "user";
     setConversation((messages) => [
       ...messages,
       { role: "user", content: enteredQuestion },
@@ -254,22 +282,33 @@ export function TenderAgentWorkspace() {
           task: enteredQuestion,
           result,
           conversation,
+          analysisSessionId,
         }),
       });
       const data = (await response.json()) as {
         answer?: string;
         message?: string;
+        webSearch?: TenderAgentResult["externalVerification"];
+        webEvidence?: TenderSource[];
+        trace?: TenderAgentResult["execution"][number];
       };
       if (!response.ok || !data.answer)
         throw new Error(data.message || "AI 问答未完成。");
       setConversation((messages) => [
         ...messages,
-        { role: "assistant", content: data.answer! },
+        { role: "assistant", content: data.answer!, sources: data.webEvidence },
       ]);
+      scrollTargetRef.current = "assistant";
+      if (data.trace || data.webSearch) setResult((current) => current ? {
+        ...current,
+        execution: data.trace ? [...current.execution, data.trace] : current.execution,
+        externalVerification: data.webSearch ?? current.externalVerification,
+      } : current);
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI 分析未完成。");
     } finally {
       setAskingAgent(false);
+      setSearchingWeb(false);
     }
   }
   function toggleReview(id: string) {
@@ -345,7 +384,10 @@ export function TenderAgentWorkspace() {
               onFilesReady={(files) => {
                 setError("");
                 setReviewedIds([]);
-                if (result) setAnalysisStale(true);
+                const removedExistingFile = uploadedFiles.some((file) => !files.some((next) => next.name === file.name && next.size === file.size));
+                const onlyAppended = uploadedFiles.length > 0 && uploadedFiles.every((file) => files.some((next) => next.name === file.name && next.size === file.size));
+                if (removedExistingFile || (result && !onlyAppended)) beginNewSession();
+                else if (result) setAnalysisStale(true);
                 setUploadedFiles(files);
               }}
             />
@@ -367,37 +409,6 @@ export function TenderAgentWorkspace() {
             {result && (
               <div className="mt-6 border-t border-black/5 pt-5">
                 <p className="text-sm font-medium">继续询问 Agent</p>
-                {(conversation.length > 0 || askingAgent) && (
-                  <div ref={chatScrollRef} onScroll={handleChatScroll} className="tender-chat-scroll mt-3 max-h-[min(34rem,calc(100vh-27rem))] space-y-3 overflow-y-auto overscroll-contain border-y border-black/5 py-4 pr-2 text-xs leading-6">
-                    {conversation.map((message, index) => (
-                      <div
-                        key={`${message.role}-${index}`}
-                        className={`rounded-xl p-3 ${message.role === "user" ? "bg-[#f7f8f9] text-neutral-700" : "bg-[#f7ffe8] text-neutral-800"}`}
-                      >
-                        <p className="font-medium">
-                          {message.role === "user" ? "用户" : "AI"}
-                        </p>
-                        <div className="mt-1"><MarkdownText value={message.content} /></div>
-                      </div>
-                    ))}
-                    {askingAgent && (
-                      <div className="rounded-xl bg-[#f7ffe8] p-3 text-neutral-800">
-                        <p className="font-medium">AI</p>
-                        <p className="mt-1 flex items-center gap-2"><LoaderCircle className="animate-spin" size={14} />Agent 正在分析…</p>
-                      </div>
-                    )}
-                    <div ref={latestMessageRef} aria-hidden="true" />
-                  </div>
-                )}
-                {showLatestMessage && (
-                  <button
-                    type="button"
-                    onClick={scrollToLatestMessage}
-                    className="mt-3 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-sm"
-                  >
-                    ↓ 查看最新消息
-                  </button>
-                )}
                 <div className="mt-3 shrink-0">
                   <textarea
                     value={task}
@@ -415,7 +426,46 @@ export function TenderAgentWorkspace() {
                     {askingAgent ? "Agent 正在分析…" : "发送"}
                   </button>
                 </div>
+                {(conversation.length > 0 || askingAgent) && (
+                  <div ref={chatScrollRef} onScroll={handleChatScroll} className="tender-chat-scroll mt-4 max-h-[min(34rem,calc(100vh-27rem))] space-y-3 overflow-y-auto overscroll-contain border-y border-black/5 py-4 pr-2 text-xs leading-6">
+                    {conversation.map((message, index) => (
+                      <div
+                        key={`${message.role}-${index}`}
+                        ref={message.role === "assistant" && index === conversation.length - 1 ? latestAssistantRef : message.role === "user" && index === conversation.length - 1 ? latestUserRef : undefined}
+                        className="scroll-mt-3"
+                      >
+                        <div className={`rounded-xl p-3 ${message.role === "user" ? "bg-[#f7f8f9] text-neutral-700" : "bg-[#f7ffe8] text-neutral-800"}`}>
+                        <p className="font-medium">
+                          {message.role === "user" ? "用户" : "AI"}
+                        </p>
+                        <div className="mt-1"><MarkdownText value={message.content} /></div>
+                        {message.sources?.length ? <Evidence sources={message.sources} /> : null}
+                        </div>
+                      </div>
+                    ))}
+                    {askingAgent && (
+                      <div ref={latestUserRef} className="rounded-xl bg-[#f7ffe8] p-3 text-neutral-800">
+                        <p className="font-medium">AI</p>
+                        <p className="mt-1 flex items-center gap-2"><LoaderCircle className="animate-spin" size={14} />{searchingWeb ? "正在联网检索并整理结果…" : "正在整理当前项目资料…"}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {showLatestMessage && (
+                  <button
+                    type="button"
+                    onClick={scrollToLatestMessage}
+                    className="mt-3 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-sm"
+                  >
+                    ↓ 查看最新消息
+                  </button>
+                )}
               </div>
+            )}
+            {!result && uploadedFiles.length > 0 && (
+              <p className="mt-5 rounded-xl bg-[#f7f8f9] px-3 py-3 text-xs leading-5 text-neutral-500">
+                正在分析当前招标文件，完成后即可继续提问。
+              </p>
             )}
             <p className="mt-5 text-center text-xs text-neutral-500">
               没有招标文件？{" "}

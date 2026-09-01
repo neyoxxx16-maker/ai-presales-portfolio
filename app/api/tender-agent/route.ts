@@ -94,13 +94,14 @@ export async function POST(request: Request) {
     }
     const body = (await request.json()) as TenderAgentRequest & {
       action?: "question";
+      analysisSessionId?: string;
       result?: TenderAgentResult;
       conversation?: Array<{ role: "user" | "assistant"; content: string }>;
     };
     if (body.action === "question") {
-      if (!body.result || !body.task?.trim())
+      if (!body.result || !body.task?.trim() || !body.analysisSessionId)
         return NextResponse.json(
-          { message: "请先完成投标分析并输入问题。" },
+          { message: "当前分析会话无效，请重新完成投标分析后再提问。" },
           { status: 400 },
         );
       return NextResponse.json(

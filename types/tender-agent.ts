@@ -390,6 +390,8 @@ export type RetrievedCompanyEvidence = {
 export type ExternalVerification = {
   enabled: boolean;
   status: "NOT_CONFIGURED" | "NOT_EXECUTED" | "COMPLETED" | "FAILED";
+  query?: string;
+  error?: string;
   results: Array<{
     title: string;
     url: string;

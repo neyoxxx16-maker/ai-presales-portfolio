@@ -1396,7 +1396,57 @@ export async function answerTenderQuestion(
   result: TenderAgentResult,
   question: string,
   conversation: Array<{ role: "user" | "assistant"; content: string }> = [],
-): Promise<{ answer: string; status: "completed" | "failed" }> {
+): Promise<{ answer: string; status: "completed" | "failed"; webSearch?: TenderAgentResult["externalVerification"]; webEvidence?: TenderSource[]; trace?: ExecutionStep }> {
+  const explicitWebRequest = /官网|公告|请联网|联网核验|帮我搜索|查询官网|核验来源|给我链接|来源\s*url/i.test(question);
+  const localTenderQuestion = /当前(?:上传)?招标文件|本项目|这份招标文件/.test(question);
+  const needsWebSearch = explicitWebRequest || (!localTenderQuestion && /最新|当前|现在|今日|最近|政策|市场信息|厂商信息|最新价格|外部公开信息/.test(question));
+  const organization = question.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,}(?:大学|学院|公司|集团|官网)/)?.[0]?.replace(/官网$/, "");
+  const topic = question.match(/采购公告|招标公告|采购|招标|政策|API 文档|文档|价格|市场信息/)?.[0];
+  const webQuery = needsWebSearch
+    ? `${organization ?? ""} ${topic ?? "公开信息"} ${/最新|当前|现在|今日|最近/.test(question) ? "最新" : ""}`.trim().slice(0, 100)
+    : undefined;
+  const webSearch = webQuery ? await externalSearch(webQuery) : undefined;
+  const webEvidence: TenderSource[] = (webSearch?.results ?? []).map((item, index) => ({
+    id: `WEB-CHAT-${index + 1}`,
+    title: item.title,
+    sourceFile: item.domain,
+    excerpt: item.snippet.slice(0, 320),
+    quote: item.snippet.slice(0, 320),
+    location: item.url,
+    category: "外部公开信息",
+  }));
+  const webTrace: ExecutionStep | undefined = webSearch
+    ? {
+        id: "webVerify",
+        label: "联网检索",
+        purpose: "通过 Tavily 核验用户请求的实时外部公开信息",
+        reason: "用户问题包含明确的联网或时效性外部信息请求。",
+        inputSummary: `web_search：${webQuery}`,
+        resultSummary: webSearch.status === "COMPLETED" ? `Tavily 查询“${webQuery}”成功，返回 ${webSearch.results.length} 条结果。` : `Tavily 查询“${webQuery}”未成功：${webSearch.error ?? "unknown_error"}。`,
+        sources: webEvidence,
+        status: webSearch.status === "COMPLETED" ? "completed" : webSearch.status === "NOT_CONFIGURED" ? "not_configured" : "failed",
+        durationMs: 1,
+        trace: {
+          runId: result.debug?.runId ?? "chat",
+          stepId: `${result.debug?.runId ?? "chat"}-web-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: "tool",
+          tool: "webVerify",
+          status: webSearch.status === "COMPLETED" ? "success" : webSearch.status === "NOT_CONFIGURED" ? "fallback" : "failed",
+          decisionSource: "rule",
+          sourceCount: webEvidence.length,
+          observation: webSearch.status === "COMPLETED" ? `web_search 成功：${webQuery}，${webEvidence.length} 条结果。` : `web_search 失败：${webSearch.error ?? "unknown_error"}。`,
+          provider: "tavily",
+          fallback: webSearch.status === "NOT_CONFIGURED" ? "missing_api_key" : undefined,
+          error: webSearch.status === "COMPLETED" ? undefined : webSearch.error,
+        },
+      }
+    : undefined;
+  const webEvidenceAppendix = webSearch?.status === "COMPLETED"
+    ? `\n\n联网检索证据（Tavily，查询时间：${webSearch.results[0]?.retrievedAt ?? "—"}）：\n${webSearch.results.map((item) => `- 来源：${item.domain}\n  页面：${item.title}\n  发布日期：${item.publishedAt ?? "页面未提供明确发布日期"}\n  URL：${item.url}`).join("\n")}`
+    : webSearch
+      ? `\n\n联网检索失败（${webSearch.error ?? "unknown_error"}），本次回答仅基于当前招标文件和企业知识库。`
+      : "";
   const evidenceQuestion = /资质|资格|条件|哪一页|第几页|页码|原文|依据|在哪/.test(question);
   const riskIndex = question.match(/第\s*([一二三四五六七八九十\d]+)\s*个风险/)?.[1];
   const numberFromChinese = (value?: string) => {
@@ -1448,6 +1498,10 @@ export async function answerTenderQuestion(
     risks: result.risks.slice(0, 8),
     conversation: conversation.slice(-6),
   };
+  if (!process.env.DEEPSEEK_API_KEY && webSearch?.status === "COMPLETED")
+    return { answer: `已完成联网检索。${webEvidenceAppendix.trim()}`, status: "completed", webSearch, webEvidence, trace: webTrace };
+  if (!process.env.DEEPSEEK_API_KEY && webSearch)
+    return { answer: `联网检索未完成：${webSearch.error ?? "unknown_error"}。本次无法核验该实时外部信息。`, status: "failed", webSearch, webEvidence, trace: webTrace };
   if (!process.env.DEEPSEEK_API_KEY && evidenceAppendix)
     return { answer: evidenceAppendix.trim(), status: "completed" };
   if (!process.env.DEEPSEEK_API_KEY)
@@ -1472,11 +1526,11 @@ export async function answerTenderQuestion(
             {
               role: "system",
               content:
-                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。当用户问资质、条件、原文、依据或哪一页时，必须逐项给出“文件、页码、原文、判断”；pageNumber 缺失时只能写“页码未定位”及给定原因，绝不能猜测页码。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
+                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。优先使用当前招标文件和企业资料；仅当代码层提供 webEvidence 时才可引用联网信息，绝不可自行声称联网、编造 URL 或日期。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。当用户问资质、条件、原文、依据或哪一页时，必须逐项给出“文件、页码、原文、判断”；pageNumber 缺失时只能写“页码未定位”及给定原因，绝不能猜测页码。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
             },
             {
               role: "user",
-              content: JSON.stringify({ question, analysis: context }),
+              content: JSON.stringify({ question, analysis: context, webEvidence: webSearch?.status === "COMPLETED" ? webSearch.results.map((item) => ({ title: item.title, url: item.url, domain: item.domain, publishedAt: item.publishedAt, snippet: item.snippet, retrievedAt: item.retrievedAt })) : [], webSearchFailure: webSearch?.status === "COMPLETED" ? undefined : webSearch?.error }),
             },
           ],
           max_tokens: 1800,
@@ -1488,19 +1542,25 @@ export async function answerTenderQuestion(
     if (!response.ok)
       return {
         answer:
-          "AI 问答生成失败：DeepSeek 未返回成功响应。现有规则分析未被清空。",
+          `AI 问答生成失败：DeepSeek 未返回成功响应。现有规则分析未被清空。${webEvidenceAppendix}`,
         status: "failed",
+        webSearch,
+        webEvidence,
+        trace: webTrace,
       };
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const answer = data.choices?.[0]?.message?.content?.trim();
     return answer
-      ? { answer: `${answer}${evidenceAppendix}`, status: "completed" }
+      ? { answer: `${answer}${evidenceAppendix}${webEvidenceAppendix}`, status: "completed", webSearch, webEvidence, trace: webTrace }
       : {
           answer:
-            "AI 问答生成失败：DeepSeek 未返回有效回答。现有规则分析未被清空。",
+            `AI 问答生成失败：DeepSeek 未返回有效回答。现有规则分析未被清空。${webEvidenceAppendix}`,
           status: "failed",
+          webSearch,
+          webEvidence,
+          trace: webTrace,
         };
   } catch (error) {
     console.error(
@@ -1508,8 +1568,11 @@ export async function answerTenderQuestion(
       error instanceof Error ? error.message : "unknown_error",
     );
     return {
-      answer: "AI 问答生成失败：请求未完成。现有规则分析未被清空。",
+      answer: `AI 问答生成失败：请求未完成。现有规则分析未被清空。${webEvidenceAppendix}`,
       status: "failed",
+      webSearch,
+      webEvidence,
+      trace: webTrace,
     };
   }
 }
