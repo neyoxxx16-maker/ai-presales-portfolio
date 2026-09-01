@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -35,6 +35,7 @@ import {
 } from "@/lib/tender-agent/project-history";
 import type {
   CompanyWorkspaceMode,
+  CompanyDocument,
   MatchStatus,
   ParsedBidDocument,
   RequirementMatch,
@@ -204,10 +205,14 @@ export function TenderAgentWorkspace() {
   const [running, setRunning] = useState(false);
   const [reviewedIds, setReviewedIds] = useState<string[]>([]);
   const [companyMode, setCompanyMode] = useState<CompanyWorkspaceMode>("demo");
+  const [workspaceDocuments, setWorkspaceDocuments] = useState<CompanyDocument[]>([]);
+  const [sourceMismatch, setSourceMismatch] = useState(false);
   const [task, setTask] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [storedFiles, setStoredFiles] = useState<ParsedBidDocument[]>([]);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [rubricOpen, setRubricOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
   const [askingAgent, setAskingAgent] = useState(false);
@@ -229,6 +234,13 @@ export function TenderAgentWorkspace() {
   const shouldAutoFollowRef = useRef(true);
   const forceScrollToLatestRef = useRef(false);
   const scrollTargetRef = useRef<"user" | "assistant">("user");
+  const handleWorkspaceDocuments = useCallback((documents: CompanyDocument[]) => {
+    setWorkspaceDocuments((previous) => {
+      const changed = previous.length > 0 && (previous.length !== documents.length || previous.some((item, index) => item.documentId !== documents[index]?.documentId || item.indexed !== documents[index]?.indexed || item.fileName !== documents[index]?.fileName || item.category !== documents[index]?.category || item.textLength !== documents[index]?.textLength || item.tags.join("|") !== documents[index]?.tags.join("|")));
+      if (changed && result?.companyMode === "workspace") setSourceMismatch(true);
+      return documents;
+    });
+  }, [result]);
   useEffect(() => {
     const activeProjectId = getActiveTenderProjectId();
     const restored = activeProjectId ? getTenderProjectSession(activeProjectId) : undefined;
@@ -237,7 +249,7 @@ export function TenderAgentWorkspace() {
       const session = getTenderProjectSession(project.projectId);
       if (!session) return;
       const projectName = projectDetails(session.result, session.files, session.projectName).projectName;
-      if (session.projectName !== projectName)
+      if (session.projectName !== projectName || project.companyMode !== session.companyMode)
         saveTenderProjectSession({ ...session, projectName });
     });
     setHistoryProjects(listTenderProjectSessions());
@@ -287,6 +299,19 @@ export function TenderAgentWorkspace() {
     }
     requestAnimationFrame(() => agentInputRef.current?.focus());
   }
+  function openRealWorkspace() {
+    setCompanyMode("workspace");
+    if (result && result.companyMode !== "workspace") setSourceMismatch(true);
+    setWorkspaceOpen(true);
+  }
+  function selectCompanyMode(mode: CompanyWorkspaceMode) {
+    if (mode === "workspace") {
+      openRealWorkspace();
+      return;
+    }
+    if (result && result.companyMode !== mode) setSourceMismatch(true);
+    setCompanyMode(mode);
+  }
   useEffect(() => {
     if (!historyHydrated || (!result && !storedFiles.length && !conversation.length)) return;
     const previous = getTenderProjectSession(analysisSessionId);
@@ -297,7 +322,7 @@ export function TenderAgentWorkspace() {
       : running || askingAgent
       ? "analyzing"
       : result
-        ? analysisStale ? "needs_review" : "completed"
+        ? analysisStale || sourceMismatch ? "needs_review" : "completed"
         : "draft";
     saveTenderProjectSession({
       projectId: analysisSessionId,
@@ -313,7 +338,7 @@ export function TenderAgentWorkspace() {
     });
     setActiveTenderProjectId(analysisSessionId);
     setHistoryProjects(listTenderProjectSessions());
-  }, [analysisSessionId, analysisStale, askingAgent, companyMode, conversation, error, historyHydrated, lastAnalyzedAt, result, running, sessionCreatedAt, storedFiles]);
+  }, [analysisSessionId, analysisStale, askingAgent, companyMode, conversation, error, historyHydrated, lastAnalyzedAt, result, running, sessionCreatedAt, sourceMismatch, storedFiles]);
   function restoreProjectSession(session: TenderProjectSession) {
     setAnalysisSessionId(session.projectId);
     setSessionCreatedAt(session.createdAt);
@@ -323,6 +348,7 @@ export function TenderAgentWorkspace() {
     setStoredFiles(session.files);
     setUploadedFiles([]);
     setCompanyMode(session.companyMode);
+    setSourceMismatch(Boolean(session.result && session.result.companyMode !== session.companyMode));
     setTask("");
     setAnalysisStale(session.status === "needs_review");
     setReviewedIds([]);
@@ -342,6 +368,7 @@ export function TenderAgentWorkspace() {
     setUploadedFiles([]);
     setTask("");
     setAnalysisStale(false);
+    setSourceMismatch(false);
     setReviewedIds([]);
     setShowLatestMessage(false);
     setActiveTenderProjectId(nextId);
@@ -394,6 +421,7 @@ export function TenderAgentWorkspace() {
       setStoredFiles(data.result.files ?? storedFiles);
       setLastAnalyzedAt(new Date().toISOString());
       setAnalysisStale(false);
+      setSourceMismatch(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析未完成。");
     } finally {
@@ -401,6 +429,10 @@ export function TenderAgentWorkspace() {
     }
   }
   async function askAgent() {
+    if (sourceMismatch) {
+      setError("企业资料源已变化，请先重新分析企业能力匹配后再继续询问。");
+      return;
+    }
     if (!result) {
       setError("请先完成投标分析后再继续询问。");
       return;
@@ -504,6 +536,7 @@ export function TenderAgentWorkspace() {
     return [project.projectName, project.projectNumber, project.purchaser]
       .some((value) => value.toLowerCase().includes(query));
   });
+  const currentAnalysisStale = analysisStale || sourceMismatch;
   return (
     <section className="bg-[#f7f8f9] py-14 lg:py-20">
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
@@ -514,12 +547,10 @@ export function TenderAgentWorkspace() {
               AI 招投标与方案生成 Agent
             </h1>
             {result && (
-              <button
-                onClick={() => setTraceOpen(true)}
-                className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium"
-              >
-                查看 Agent 轨迹
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setTraceOpen(true)} className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium">查看 Agent 轨迹</button>
+                <button onClick={() => setRubricOpen(true)} className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium">查看评估结果</button>
+              </div>
             )}
           </div>
           <p className="mt-5 max-w-3xl text-sm leading-7 text-neutral-500">
@@ -527,13 +558,13 @@ export function TenderAgentWorkspace() {
           </p>
           <div className="mt-3 flex gap-2">
             <button
-              onClick={() => setCompanyMode("demo")}
+              onClick={() => selectCompanyMode("demo")}
               className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "demo" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
             >
               演示企业资料
             </button>
             <button
-              onClick={() => setCompanyMode("workspace")}
+              onClick={openRealWorkspace}
               className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "workspace" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
             >
               真实企业资料
@@ -544,6 +575,7 @@ export function TenderAgentWorkspace() {
               ? "当前使用示例供应商资料，仅用于作品集演示。"
               : "当前仅使用本地真实企业资料，不会混入演示资料。"}
           </p>
+          <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={openRealWorkspace} />
         </div>
         <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside ref={leftPanelRef} className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
@@ -591,7 +623,7 @@ export function TenderAgentWorkspace() {
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-medium disabled:opacity-50"
               >
                 <Sparkles size={16} />
-                {running ? "分析中…" : analysisStale ? "重新分析" : "开始投标分析"}
+                {running ? "分析中…" : currentAnalysisStale ? companyMode === "workspace" ? "使用真实企业资料重新分析" : "重新分析" : "开始投标分析"}
               </button>
             </div>
             <div className="mt-6 border-t border-black/5 pt-5">
@@ -691,7 +723,11 @@ export function TenderAgentWorkspace() {
             {!running && result && (
               <ResultView
                 result={result}
-                analysisStale={analysisStale}
+                analysisStale={currentAnalysisStale}
+                sourceMismatch={sourceMismatch}
+                companyMode={companyMode}
+                workspaceDocuments={workspaceDocuments}
+                onOpenRealWorkspace={openRealWorkspace}
                 reviewedIds={reviewedIds}
                 onToggleReview={toggleReview}
                 onExport={exportResult}
@@ -757,6 +793,7 @@ export function TenderAgentWorkspace() {
                       </p>
                     )}
                     <p className="mt-2 text-neutral-500">{project.files.length} 个文件 · {project.status === "completed" ? "已完成" : project.status === "needs_review" || project.status === "draft" ? "待补充" : project.status === "analyzing" ? "分析中" : "分析失败"}</p>
+                    <p className="mt-1 text-[11px] text-neutral-400">{project.companyMode === "workspace" ? "真实企业资料" : "演示企业资料"}</p>
                     <p className="mt-1 text-[11px] text-neutral-400">
                       {project.status === "analyzing" ? "正在分析…" : `最后分析：${project.lastAnalyzedAt ? new Date(project.lastAnalyzedAt).toLocaleString("zh-CN") : "尚未分析"}`}
                     </p>
@@ -785,6 +822,15 @@ export function TenderAgentWorkspace() {
           onClose={() => setTraceOpen(false)}
         />
       )}
+      {result && <RubricDrawer result={result} open={rubricOpen} onClose={() => setRubricOpen(false)} />}
+      {workspaceOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/20 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="管理企业资料">
+          <div className="ml-auto flex h-full w-full max-w-4xl flex-col rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-center justify-between border-b border-black/5 pb-4"><div><p className="text-lg font-medium">管理企业资料</p><p className="mt-1 text-xs text-neutral-500">仅使用本地真实企业资料，不会混入演示资料。</p></div><button type="button" onClick={() => setWorkspaceOpen(false)} className="rounded-full border border-black/10 p-2 text-neutral-600" aria-label="关闭企业资料管理"><X size={16} /></button></div>
+            <div className="mt-5 flex-1 overflow-y-auto"><TenderCompanyLibraryManager onDocumentsChange={handleWorkspaceDocuments} /></div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -792,12 +838,20 @@ export function TenderAgentWorkspace() {
 function ResultView({
   result,
   analysisStale,
+  sourceMismatch,
+  companyMode,
+  workspaceDocuments,
+  onOpenRealWorkspace,
   reviewedIds,
   onToggleReview,
   onExport,
 }: {
   result: TenderAgentResult;
   analysisStale: boolean;
+  sourceMismatch: boolean;
+  companyMode: CompanyWorkspaceMode;
+  workspaceDocuments: CompanyDocument[];
+  onOpenRealWorkspace: () => void;
   reviewedIds: string[];
   onToggleReview: (id: string) => void;
   onExport: () => void;
@@ -887,7 +941,10 @@ function ResultView({
         )}
         {analysisStale && (
           <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-900">
-            检测到新增项目材料，当前分析结果可能已过期。请点击“重新分析”刷新判断、风险与建议。
+            {sourceMismatch
+              ? `当前结果基于${result.companyMode === "workspace" ? "真实企业资料" : "演示企业资料"}，企业资料源已切换；招标文件解析已保留，请重新分析企业能力匹配。`
+              : "检测到新增项目材料，当前分析结果可能已过期。请点击“重新分析”刷新判断、风险与建议。"}
+            {sourceMismatch && companyMode === "workspace" && <button type="button" onClick={onOpenRealWorkspace} className="ml-2 font-medium underline">补充真实企业资料</button>}
           </p>
         )}
       </section>
@@ -955,7 +1012,7 @@ function ResultView({
       {tab === "scoring" && <ScoringView result={result} />}
       {tab === "strategy" && <PresalesStrategyView result={result} />}
       {tab === "response" && <ResponseView result={result} />}
-      {tab === "library" && <LibraryView />}
+      {tab === "library" && <LibraryView companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={onOpenRealWorkspace} />}
       <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
         <p>{result.notice}</p>
         <button
@@ -1087,6 +1144,24 @@ function TraceDrawer({
       </aside>
     </div>
   );
+}
+function RubricDrawer({ result, open, onClose }: { result: TenderAgentResult; open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  const evaluation = result.presalesStrategy.evaluation;
+  const evidence = result.execution.flatMap((item) => item.sources).slice(0, 6);
+  const toolFailures = result.execution.filter((item) => item.status === "failed");
+  const rows = [
+    ["Evidence Grounding", evaluation.evidenceCoverage >= 80 ? "PASS" : "需复核", `关键结论 Evidence 覆盖率 ${evaluation.evidenceCoverage}%。`],
+    ["事实可追溯性", evidence.length > 0 ? "PASS" : "需复核", evidence.length ? `本次执行保留 ${evidence.length} 条可展开的来源。` : "当前没有可展示的来源，结论需人工复核。"],
+    ["风险识别完整度", `${Math.min(5, Math.max(1, result.presalesStrategy.riskRadar.risks.length + 2))}/5`, `已识别 ${result.presalesStrategy.riskRadar.risks.length} 项结构化风险；未识别项不会被推断为无风险。`],
+    ["缺失信息处理", evaluation.uncertaintyHandling >= 80 ? "PASS" : "需复核", `不确定性处理覆盖率 ${evaluation.uncertaintyHandling}%。`],
+    ["不确定性表达", evaluation.uncertaintyHandling >= 80 ? "PASS" : "需复核", "资料不足时使用待确认/资料未提供，而非反向推断不具备。"],
+    ["Tool Calling 正确性", toolFailures.length === 0 ? "PASS" : "需复核", toolFailures.length ? `${toolFailures.map((item) => item.label).join("、")} 未成功完成。` : "仅展示本次实际调用与规则跳过，不额外触发工具。"],
+    ["幻觉控制", evaluation.unsupportedClaims === 0 ? "PASS" : "需复核", evaluation.unsupportedClaims === 0 ? "未发现无依据的确定性结论。" : `发现 ${evaluation.unsupportedClaims} 项需要补充证据的结论。`],
+  ] as const;
+  const passed = rows.filter(([, value]) => value === "PASS" || /^\d\/5$/.test(value)).length;
+  const score = Math.round((evaluation.evidenceCoverage + evaluation.completeness + evaluation.uncertaintyHandling + (evaluation.unsupportedClaims === 0 ? 100 : 0) + (toolFailures.length ? 50 : 100)) / 5);
+  return <div className="fixed inset-0 z-[70] bg-black/20" role="dialog" aria-modal="true" aria-label="Agent 轻量评估结果"><aside className="ml-auto flex h-full w-full max-w-xl flex-col bg-white p-5 shadow-2xl sm:p-7"><div className="flex items-center justify-between border-b border-black/5 pb-4"><div><p className="text-lg font-medium">Agent 轻量评估</p><p className="mt-1 text-xs text-neutral-500">用于本次结果的可追溯性与降级表现验收，不是招标评分标准。</p></div><button type="button" onClick={onClose} className="rounded-full border border-black/10 px-3 py-1.5 text-xs">关闭</button></div><div className="mt-5 flex-1 space-y-3 overflow-y-auto">{rows.map(([label, value, detail]) => <details key={label} className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium"><span>{label}</span><span className={`rounded-full px-2.5 py-1 text-[11px] ${value === "PASS" || /^\d\/5$/.test(value) ? "bg-[#e7f6cf] text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{value}</span></summary><p className="mt-3 text-xs leading-6 text-neutral-600">{detail}</p>{evidence.length > 0 && <Evidence sources={evidence} />}</details>)}<div className="rounded-2xl bg-[#e7f6cf] p-4"><p className="text-sm font-medium">综合评分：{score}/100</p><p className="mt-1 text-xs leading-6 text-neutral-700">通过项 {passed}/{rows.length} · 综合等级 {evaluation.overallQuality}。展开各项可查看原因与对应 Evidence。</p></div></div></aside></div>;
 }
 function Overview({
   result,
@@ -1472,7 +1547,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
               <Evidence sources={item.evidence} judgment={item.clause} />
             </article>
           ))}
-          {!strategy.riskRadar.risks.length && <p className="py-8 text-center text-sm text-neutral-400">未形成需要升级的结构化风险；仍建议人工复核关键条款。</p>}
+          {!strategy.riskRadar.risks.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">当前未形成升级风险清单</p><p className="mt-1">已检查废标风险、资格风险、材料缺口与高风险条款；现有文本未提供足以升级的组合证据。</p><p className="mt-1">建议补充：完整资格要求、否决条款和技术参数原文，再进行人工复核。</p></article>}
         </div>
       )}
       {section === "sprint" && (
@@ -1485,7 +1560,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
               <Evidence sources={item.evidence} />
             </article>
           ))}
-          {!strategy.scoreSprint.actions.length && <p className="py-8 text-center text-sm text-neutral-400">暂无可用评分项，未生成虚构分值预测。</p>}
+          {!strategy.scoreSprint.actions.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">当前文件未解析到结构化评分标准，因此不能可靠预测得分。</p><p className="mt-1">已识别竞争维度：企业资质、类似业绩、技术响应与服务保障。</p><p className="mt-1">需要补充：评分表、分值权重及加分/扣分规则；未生成虚构分数。</p></article>}
         </div>
       )}
       {section === "control" && (
@@ -1494,7 +1569,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
           {strategy.controlRiskAnalysis.suspiciousClauses.map((item, index) => (
             <article key={`${item.category}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4"><p className="text-sm font-medium">{item.category} · {item.riskLevel === "high" ? "高风险" : "中风险"}</p><p className="mt-2 text-xs leading-6 text-neutral-600">{item.reason}</p><p className="mt-1 text-xs leading-6 text-neutral-700">应对：{item.responseStrategy}</p><Evidence sources={item.evidence} judgment={item.clause} /></article>
           ))}
-          {!strategy.controlRiskAnalysis.suspiciousClauses.length && <p className="py-8 text-center text-sm text-neutral-400">未发现可由当前文本直接支持的明显倾向性风险。</p>}
+          {!strategy.controlRiskAnalysis.suspiciousClauses.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">未发现可由当前文本直接支持的明显倾向性信号。</p><p className="mt-1">已检查品牌、参数、业绩、地域及技术路线；不能据此判断存在内定或控标。</p><p className="mt-1">建议补充：完整技术参数、品牌限制及业绩门槛原文。</p></article>}
         </div>
       )}
       {section === "competitor" && (
@@ -1503,7 +1578,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
           {strategy.competitorAnalysis.likelyCompetitionAreas.map((item, index) => (
             <article key={`${item.dimension}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4"><p className="text-sm font-medium">{item.dimension} · {item.scoreWeight}</p><p className="mt-2 text-xs leading-6 text-neutral-600">推演：{item.competitorLikelyStrategy}</p><p className="mt-1 text-xs leading-6 text-neutral-700">我方现状：{item.ourCurrentPosition}</p><Evidence sources={item.evidence} /></article>
           ))}
-          {!strategy.competitorAnalysis.likelyCompetitionAreas.length && <p className="py-8 text-center text-sm text-neutral-400">未解析到结构化评分规则，无法可靠推演竞品策略。</p>}
+          {!strategy.competitorAnalysis.likelyCompetitionAreas.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">当前可判断竞争维度：技术参数、企业资质、案例与服务能力。</p><p className="mt-1">无法判断：竞争对手名单、评分权重和公开中标表现；因此未虚构竞品结论。</p><p className="mt-1">建议补充：评分规则、公开中标信息；如需外部最新信息，可在 Agent 对话中明确请求 Web Search 核验。</p></article>}
         </div>
       )}
       <div className="mt-5 grid gap-2 border-t border-black/5 pt-4 text-xs text-neutral-600 sm:grid-cols-4">
@@ -1591,25 +1666,34 @@ function ResponseView({ result }: { result: TenderAgentResult }) {
     </section>
   );
 }
-function LibraryView() {
+function CompanySourceSummary({
+  companyMode,
+  workspaceDocuments,
+  onOpenRealWorkspace,
+}: {
+  companyMode: CompanyWorkspaceMode;
+  workspaceDocuments: CompanyDocument[];
+  onOpenRealWorkspace: () => void;
+}) {
+  const realDocuments = workspaceDocuments.filter((item) => item.parseStatus === "PARSED" && item.indexed);
+  const demoEvidenceCount = companyLibraryOverview.sections.reduce((total, [, count]) => total + count, 0);
+  return (
+    <section className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-2xl border border-black/5 bg-white px-4 py-3 text-xs text-neutral-600">
+      <span className="font-medium text-neutral-800">我方资料：</span><button type="button" onClick={onOpenRealWorkspace} className="font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-4 hover:text-emerald-800">{companyMode === "demo" ? "演示企业资料" : "真实企业资料"}</button><span>·</span><span>{companyMode === "demo" ? `${companyLibraryOverview.sections.length} 类能力 · ${demoEvidenceCount} 条 Evidence` : `${workspaceDocuments.length} 个文件 · 已索引 ${realDocuments.length} 个`}</span><button type="button" onClick={onOpenRealWorkspace} className="ml-auto rounded-full border border-black/10 px-3 py-1.5 font-medium text-neutral-700 hover:border-emerald-800 hover:text-emerald-800">管理企业资料</button>
+    </section>
+  );
+}
+function LibraryView({ companyMode, workspaceDocuments, onOpenRealWorkspace }: {
+  companyMode: CompanyWorkspaceMode;
+  workspaceDocuments: CompanyDocument[];
+  onOpenRealWorkspace: () => void;
+}) {
   return (
     <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
       <p className="text-sm font-medium">我方资料库</p>
-      <p className="mt-1 text-xs text-neutral-500">
-        {companyLibraryOverview.company} · {companyLibraryOverview.label}
-      </p>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {companyLibraryOverview.sections.map(([name, count]) => (
-          <div key={name} className="rounded-2xl bg-[#f7f8f9] p-4">
-            <p className="text-sm font-medium">{name}</p>
-            <p className="mt-2 text-2xl font-medium">{count}</p>
-          </div>
-        ))}
-      </div>
-      <p className="mt-5 text-xs text-neutral-400">
-        {companyLibraryOverview.notice}
-      </p>
-      <TenderCompanyLibraryManager />
+      <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={onOpenRealWorkspace} />
+      {companyMode === "demo" && <p className="mt-5 text-xs text-neutral-400">{companyLibraryOverview.notice}</p>}
+      {companyMode === "workspace" && <button type="button" onClick={onOpenRealWorkspace} className="mt-5 text-xs font-medium text-neutral-800 underline">管理真实企业资料</button>}
     </section>
   );
 }

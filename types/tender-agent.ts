@@ -428,6 +428,7 @@ export type CompanyDocument = {
   validTo?: string;
   issuer?: string;
   tags: string[];
+  notes?: string;
   filePath: string;
   textPath?: string;
   chunkCount: number;
@@ -447,7 +448,7 @@ export type CompanyEvidenceChunk = {
   pageNumber?: number;
   metadata: Pick<
     CompanyDocument,
-    "fileName" | "validFrom" | "validTo" | "issuer" | "tags" | "parseMethod"
+    "fileName" | "validFrom" | "validTo" | "issuer" | "tags" | "notes" | "parseMethod"
   >;
   embedding?: number[];
 };

@@ -42,6 +42,7 @@ type TenderProjectIndexItem = Pick<
   | "projectName"
   | "projectNumber"
   | "purchaser"
+  | "companyMode"
   | "files"
   | "status"
   | "createdAt"
@@ -71,6 +72,7 @@ function toIndexItem(session: TenderProjectSession): TenderProjectIndexItem {
     projectName,
     projectNumber,
     purchaser,
+    companyMode,
     files,
     status,
     createdAt,
@@ -82,6 +84,7 @@ function toIndexItem(session: TenderProjectSession): TenderProjectIndexItem {
     projectName,
     projectNumber,
     purchaser,
+    companyMode,
     files,
     status,
     createdAt,
