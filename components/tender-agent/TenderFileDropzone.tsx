@@ -25,10 +25,13 @@ export function TenderFileDropzone({
   companyMode,
   onBusy,
   onFilesReady,
+  restoredFiles = [],
 }: {
   companyMode: CompanyWorkspaceMode;
   onBusy: (busy: boolean) => void;
-  onFilesReady: (files: File[]) => void;
+  onFilesReady: (files: File[], parsedFiles: ParsedBidDocument[]) => void;
+  /** Parsed file metadata from a restored project; no binary file is re-uploaded. */
+  restoredFiles?: ParsedBidDocument[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -85,7 +88,10 @@ export function TenderFileDropzone({
         })),
       ];
       setItems(next);
-      onFilesReady(next.map((item) => item.file));
+      onFilesReady(
+        next.map((item) => item.file),
+        next.flatMap((item) => (item.parsed ? [item.parsed] : [])),
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "文件解析未完成。");
     } finally {
@@ -97,8 +103,28 @@ export function TenderFileDropzone({
   function remove(file: File) {
     const next = items.filter((item) => item.file !== file);
     setItems(next);
-    onFilesReady(next.map((item) => item.file));
+    onFilesReady(
+      next.map((item) => item.file),
+      next.flatMap((item) => (item.parsed ? [item.parsed] : [])),
+    );
   }
+  const displayItems = items.length
+    ? items.map((item) => ({
+        key: `${item.file.name}-${item.file.size}`,
+        fileName: item.file.name,
+        fileSize: item.file.size,
+        parsed: item.parsed,
+        removable: true,
+        file: item.file,
+      }))
+    : restoredFiles.map((parsed) => ({
+        key: `${parsed.fileName}-${parsed.fileSize}`,
+        fileName: parsed.fileName,
+        fileSize: parsed.fileSize,
+        parsed,
+        removable: false,
+        file: undefined,
+      }));
   return (
     <div className="mt-5">
       <div
@@ -142,11 +168,11 @@ export function TenderFileDropzone({
           }}
         />
       </div>
-      {items.length > 0 && (
+      {displayItems.length > 0 && (
         <div className="mt-3 space-y-2">
-          {items.map((item) => (
+          {displayItems.map((item) => (
             <div
-              key={`${item.file.name}-${item.file.size}`}
+              key={item.key}
               className="rounded-xl bg-[#f7f8f9] p-3 text-xs"
             >
               <div className="flex gap-2">
@@ -156,12 +182,12 @@ export function TenderFileDropzone({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-neutral-800">
-                    {item.file.name}
+                    {item.fileName}
                   </p>
                   <p className="text-neutral-500">
                     {item.parsed?.fileType ??
-                      extension(item.file.name).toUpperCase()}{" "}
-                    · {readableSize(item.file.size)}
+                      extension(item.fileName).toUpperCase()}{" "}
+                    · {readableSize(item.fileSize)}
                   </p>
                   <p className="mt-1 text-emerald-700">
                     {item.parsed ? (
@@ -174,18 +200,22 @@ export function TenderFileDropzone({
                           : "文本解析"}
                       </>
                     ) : (
-                      item.error
+                      "解析失败"
                     )}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  aria-label={`删除 ${item.file.name}`}
-                  onClick={() => remove(item.file)}
-                  className="text-neutral-400 hover:text-red-700"
-                >
-                  <Trash2 size={15} />
-                </button>
+                {item.removable && item.file ? (
+                  <button
+                    type="button"
+                    aria-label={`删除 ${item.fileName}`}
+                    onClick={() => remove(item.file!)}
+                    className="text-neutral-400 hover:text-red-700"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-neutral-400">历史已恢复</span>
+                )}
               </div>
             </div>
           ))}

@@ -11,6 +11,7 @@ import {
   runTenderAgent,
 } from "@/lib/tender-agent/orchestrator";
 import type {
+  ParsedBidDocument,
   TenderAgentRequest,
   TenderAgentResult,
 } from "@/types/tender-agent";
@@ -92,11 +93,12 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ files: result.files, result });
     }
-    const body = (await request.json()) as TenderAgentRequest & {
+    const body = (await request.json()) as Omit<TenderAgentRequest, "files"> & {
       action?: "question";
       analysisSessionId?: string;
       result?: TenderAgentResult;
       conversation?: Array<{ role: "user" | "assistant"; content: string }>;
+      files?: ParsedBidDocument[];
     };
     if (body.action === "question") {
       if (!body.result || !body.task?.trim() || !body.analysisSessionId)
@@ -108,12 +110,34 @@ export async function POST(request: Request) {
         await answerTenderQuestion(body.result, body.task.trim(), body.conversation),
       );
     }
+    if (body.action === "reanalyze") {
+      if (!body.files?.length)
+        return NextResponse.json(
+          { message: "历史项目未保留可重新分析的解析文本。" },
+          { status: 400 },
+        );
+      const content = body.files
+        .map(
+          (file) =>
+            `[[SOURCE:${file.fileName}]]\n${file.canonicalDocumentText || file.text}`,
+        )
+        .join("\n\n");
+      return NextResponse.json({
+        result: await runTenderAgent({
+          mode: "upload",
+          fileName: `${body.files.length} 份历史招标项目资料`,
+          content,
+          companyMode: body.companyMode,
+        }),
+      });
+    }
     if (body.mode !== "sample")
       return NextResponse.json(
         { message: "请上传一份招标文件，或运行示例文件。" },
         { status: 400 },
       );
-    return NextResponse.json({ result: await runTenderAgent(body) });
+    const { action: _action, analysisSessionId: _session, result: _result, conversation: _conversation, files: _files, ...agentRequest } = body;
+    return NextResponse.json({ result: await runTenderAgent(agentRequest) });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     console.error("Tender Agent request failed", code || "unknown_error");

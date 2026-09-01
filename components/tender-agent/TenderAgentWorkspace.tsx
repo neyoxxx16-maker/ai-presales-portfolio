@@ -9,17 +9,34 @@ import {
   Download,
   FileSearch,
   FileText,
+  History,
   LoaderCircle,
+  Plus,
+  Search,
   ShieldCheck,
   Sparkles,
+  Trash2,
+  X,
   Workflow,
 } from "lucide-react";
 import { TenderFileDropzone } from "@/components/tender-agent/TenderFileDropzone";
 import { TenderCompanyLibraryManager } from "@/components/tender-agent/TenderCompanyLibraryManager";
 import { companyLibraryOverview } from "@/data/tender/knowledge";
+import {
+  deleteTenderProjectSession,
+  getActiveTenderProjectId,
+  getTenderProjectSession,
+  listTenderProjectSessions,
+  saveTenderProjectSession,
+  setActiveTenderProjectId,
+  type ProjectConversationMessage,
+  type ProjectSessionStatus,
+  type TenderProjectSession,
+} from "@/lib/tender-agent/project-history";
 import type {
   CompanyWorkspaceMode,
   MatchStatus,
+  ParsedBidDocument,
   RequirementMatch,
   RiskLevel,
   TenderAgentResult,
@@ -33,12 +50,27 @@ type Tab =
   | "scoring"
   | "response"
   | "library";
-type ConversationMessage = { role: "user" | "assistant"; content: string; sources?: TenderSource[] };
-type StoredTenderSession = { id: string; fileNames: string[]; result?: TenderAgentResult; conversation: ConversationMessage[]; updatedAt: string };
+type ConversationMessage = ProjectConversationMessage;
 const createAnalysisSessionId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `tender-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const createConversationId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const pendingValue = (value?: string) =>
+  value && value !== "待确认" && value !== "资料未提供" ? value : "待确认";
+function projectDetails(result?: TenderAgentResult, files: ParsedBidDocument[] = []) {
+  const info = result?.document.projectInfo;
+  return {
+    projectName: pendingValue(info?.projectName) !== "待确认"
+      ? pendingValue(info?.projectName)
+      : files[0]?.fileName || "未命名招标项目",
+    projectNumber: pendingValue(info?.projectCode),
+    purchaser: pendingValue(info?.purchaser),
+  };
+}
 const statusLabel: Record<MatchStatus, string> = {
   PASS: "符合",
   PENDING: "待确认",
@@ -165,6 +197,7 @@ export function TenderAgentWorkspace() {
   const [companyMode, setCompanyMode] = useState<CompanyWorkspaceMode>("demo");
   const [task, setTask] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [storedFiles, setStoredFiles] = useState<ParsedBidDocument[]>([]);
   const [traceOpen, setTraceOpen] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
@@ -172,13 +205,27 @@ export function TenderAgentWorkspace() {
   const [searchingWeb, setSearchingWeb] = useState(false);
   const [showLatestMessage, setShowLatestMessage] = useState(false);
   const [analysisSessionId, setAnalysisSessionId] = useState(createAnalysisSessionId);
+  const [sessionCreatedAt, setSessionCreatedAt] = useState(() => new Date().toISOString());
+  const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string>();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyProjects, setHistoryProjects] = useState<ReturnType<typeof listTenderProjectSessions>>([]);
+  const [historyHydrated, setHistoryHydrated] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const latestUserRef = useRef<HTMLDivElement>(null);
   const latestAssistantRef = useRef<HTMLDivElement>(null);
   const shouldAutoFollowRef = useRef(true);
   const forceScrollToLatestRef = useRef(false);
   const scrollTargetRef = useRef<"user" | "assistant">("user");
-  const sessionsRef = useRef<Record<string, StoredTenderSession>>({});
+  useEffect(() => {
+    const activeProjectId = getActiveTenderProjectId();
+    const restored = activeProjectId ? getTenderProjectSession(activeProjectId) : undefined;
+    setHistoryProjects(listTenderProjectSessions());
+    if (restored) restoreProjectSession(restored);
+    setHistoryHydrated(true);
+  // Restore only once after browser storage becomes available.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!askingAgent && !conversation.length) return;
     const container = chatScrollRef.current;
@@ -210,33 +257,102 @@ export function TenderAgentWorkspace() {
     setShowLatestMessage(false);
   }
   useEffect(() => {
-    const session: StoredTenderSession = { id: analysisSessionId, fileNames: uploadedFiles.map((file) => file.name), result, conversation, updatedAt: new Date().toISOString() };
-    sessionsRef.current[analysisSessionId] = session;
-    try { sessionStorage.setItem("tender-agent-sessions", JSON.stringify(sessionsRef.current)); } catch { /* Storage is optional; request context remains session-scoped. */ }
-  }, [analysisSessionId, conversation, result, uploadedFiles]);
-  function beginNewSession() {
-    setAnalysisSessionId(createAnalysisSessionId());
+    if (!historyHydrated || (!result && !storedFiles.length && !conversation.length)) return;
+    const previous = getTenderProjectSession(analysisSessionId);
+    const now = new Date().toISOString();
+    const details = projectDetails(result, storedFiles);
+    const status: ProjectSessionStatus = error
+      ? "failed"
+      : running || askingAgent
+      ? "analyzing"
+      : result
+        ? analysisStale ? "needs_review" : "completed"
+        : "draft";
+    saveTenderProjectSession({
+      projectId: analysisSessionId,
+      ...details,
+      files: result?.files?.length ? result.files : storedFiles,
+      result,
+      conversations: conversation,
+      companyMode,
+      status,
+      createdAt: previous?.createdAt ?? sessionCreatedAt,
+      updatedAt: now,
+      lastAnalyzedAt: result ? lastAnalyzedAt ?? now : undefined,
+    });
+    setActiveTenderProjectId(analysisSessionId);
+    setHistoryProjects(listTenderProjectSessions());
+  }, [analysisSessionId, analysisStale, askingAgent, companyMode, conversation, error, historyHydrated, lastAnalyzedAt, result, running, sessionCreatedAt, storedFiles]);
+  function restoreProjectSession(session: TenderProjectSession) {
+    setAnalysisSessionId(session.projectId);
+    setSessionCreatedAt(session.createdAt);
+    setLastAnalyzedAt(session.lastAnalyzedAt);
+    setResult(session.result);
+    setConversation(session.conversations);
+    setStoredFiles(session.files);
+    setUploadedFiles([]);
+    setCompanyMode(session.companyMode);
+    setTask("");
+    setAnalysisStale(session.status === "needs_review");
+    setReviewedIds([]);
+    setError("");
+    setShowLatestMessage(false);
+    setActiveTenderProjectId(session.projectId);
+  }
+  function beginNewSession(createProject = false) {
+    const nextId = createAnalysisSessionId();
+    const now = new Date().toISOString();
+    setAnalysisSessionId(nextId);
+    setSessionCreatedAt(now);
+    setLastAnalyzedAt(undefined);
     setResult(undefined);
     setConversation([]);
+    setStoredFiles([]);
+    setUploadedFiles([]);
     setTask("");
     setAnalysisStale(false);
     setReviewedIds([]);
     setShowLatestMessage(false);
+    setActiveTenderProjectId(nextId);
+    if (createProject && historyHydrated) {
+      saveTenderProjectSession({
+        projectId: nextId,
+        projectName: "未命名招标项目",
+        projectNumber: "待确认",
+        purchaser: "待确认",
+        files: [],
+        conversations: [],
+        companyMode,
+        status: "draft",
+        createdAt: now,
+        updatedAt: now,
+      });
+      setHistoryProjects(listTenderProjectSessions());
+    }
   }
   async function startAnalysis() {
-    if (!uploadedFiles.length || running) return;
+    if ((!uploadedFiles.length && !storedFiles.length) || running) return;
     setRunning(true);
     setError("");
     setReviewedIds([]);
     try {
-      const body = new FormData();
-      uploadedFiles.forEach((file) => body.append("file", file));
-      body.append("companyMode", companyMode);
-      body.append("action", "analyze");
-      const response = await fetch("/api/tender-agent", {
-        method: "POST",
-        body,
-      });
+      const response = uploadedFiles.length
+        ? await (() => {
+            const body = new FormData();
+            uploadedFiles.forEach((file) => body.append("file", file));
+            body.append("companyMode", companyMode);
+            body.append("action", "analyze");
+            return fetch("/api/tender-agent", { method: "POST", body });
+          })()
+        : await fetch("/api/tender-agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "reanalyze",
+              companyMode,
+              files: storedFiles,
+            }),
+          });
       const data = (await response.json()) as {
         result?: TenderAgentResult;
         message?: string;
@@ -244,6 +360,8 @@ export function TenderAgentWorkspace() {
       if (!response.ok || !data.result)
         throw new Error(data.message || "分析未完成。");
       setResult(data.result);
+      setStoredFiles(data.result.files ?? storedFiles);
+      setLastAnalyzedAt(new Date().toISOString());
       setAnalysisStale(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析未完成。");
@@ -270,7 +388,12 @@ export function TenderAgentWorkspace() {
     scrollTargetRef.current = "user";
     setConversation((messages) => [
       ...messages,
-      { role: "user", content: enteredQuestion },
+      {
+        id: createConversationId(),
+        role: "user",
+        content: enteredQuestion,
+        createdAt: new Date().toISOString(),
+      },
     ]);
     setTask("");
     try {
@@ -296,7 +419,13 @@ export function TenderAgentWorkspace() {
         throw new Error(data.message || "AI 问答未完成。");
       setConversation((messages) => [
         ...messages,
-        { role: "assistant", content: data.answer!, sources: data.webEvidence },
+        {
+          id: createConversationId(),
+          role: "assistant",
+          content: data.answer!,
+          sources: data.webEvidence,
+          createdAt: new Date().toISOString(),
+        },
       ]);
       scrollTargetRef.current = "assistant";
       if (data.trace || data.webSearch) setResult((current) => current ? {
@@ -328,6 +457,22 @@ export function TenderAgentWorkspace() {
     link.click();
     URL.revokeObjectURL(url);
   }
+  function openProjectHistory() {
+    setHistoryProjects(listTenderProjectSessions());
+    setHistoryOpen(true);
+  }
+  function deleteProject(projectId: string, projectName: string) {
+    if (!window.confirm(`确定删除“${projectName}”的本地项目历史吗？此操作不可恢复。`)) return;
+    deleteTenderProjectSession(projectId);
+    setHistoryProjects(listTenderProjectSessions());
+    if (projectId === analysisSessionId) beginNewSession();
+  }
+  const filteredHistoryProjects = historyProjects.filter((project) => {
+    const query = historyQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [project.projectName, project.projectNumber, project.purchaser]
+      .some((value) => value.toLowerCase().includes(query));
+  });
   return (
     <section className="bg-[#f7f8f9] py-14 lg:py-20">
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
@@ -371,17 +516,28 @@ export function TenderAgentWorkspace() {
         </div>
         <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
-            <div className="flex items-center gap-2">
-              <FileSearch size={16} />
-              <h2 className="font-medium">招标材料输入</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileSearch size={16} />
+                <h2 className="font-medium">招标材料输入</h2>
+              </div>
+              <button
+                type="button"
+                onClick={openProjectHistory}
+                className="inline-flex items-center gap-1 rounded-full border border-black/10 px-2.5 py-1.5 text-[11px] font-medium text-neutral-700"
+              >
+                <History size={13} /> 历史项目
+              </button>
             </div>
             <p className="mt-3 text-xs leading-6 text-neutral-500">
               可一次或分批追加项目资料。文件解析完成后，再手动启动完整投标分析。
             </p>
             <TenderFileDropzone
+              key={analysisSessionId}
               companyMode={companyMode}
               onBusy={setRunning}
-              onFilesReady={(files) => {
+              restoredFiles={storedFiles}
+              onFilesReady={(files, parsedFiles) => {
                 setError("");
                 setReviewedIds([]);
                 const removedExistingFile = uploadedFiles.some((file) => !files.some((next) => next.name === file.name && next.size === file.size));
@@ -389,6 +545,7 @@ export function TenderAgentWorkspace() {
                 if (removedExistingFile || (result && !onlyAppended)) beginNewSession();
                 else if (result) setAnalysisStale(true);
                 setUploadedFiles(files);
+                setStoredFiles(parsedFiles);
               }}
             />
             <div className="mt-6 border-t border-black/5 pt-5">
@@ -399,7 +556,7 @@ export function TenderAgentWorkspace() {
               <button
                 onClick={startAnalysis}
                 type="button"
-                disabled={running || !uploadedFiles.length}
+                disabled={running || (!uploadedFiles.length && !storedFiles.length)}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-medium disabled:opacity-50"
               >
                 <Sparkles size={16} />
@@ -409,23 +566,6 @@ export function TenderAgentWorkspace() {
             {result && (
               <div className="mt-6 border-t border-black/5 pt-5">
                 <p className="text-sm font-medium">继续询问 Agent</p>
-                <div className="mt-3 shrink-0">
-                  <textarea
-                    value={task}
-                    onChange={(event) => setTask(event.target.value)}
-                    placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
-                    className="min-h-24 w-full rounded-xl border border-black/10 bg-[#f7f8f9] p-3 text-xs leading-5 outline-none focus:border-black/30"
-                  />
-                  <button
-                    onClick={askAgent}
-                    type="button"
-                    disabled={running || askingAgent || !task.trim()}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
-                  >
-                    <Sparkles size={16} />
-                    {askingAgent ? "Agent 正在分析…" : "发送"}
-                  </button>
-                </div>
                 {(conversation.length > 0 || askingAgent) && (
                   <div ref={chatScrollRef} onScroll={handleChatScroll} className="tender-chat-scroll mt-4 max-h-[min(34rem,calc(100vh-27rem))] space-y-3 overflow-y-auto overscroll-contain border-y border-black/5 py-4 pr-2 text-xs leading-6">
                     {conversation.map((message, index) => (
@@ -460,6 +600,23 @@ export function TenderAgentWorkspace() {
                     ↓ 查看最新消息
                   </button>
                 )}
+                <div className="mt-3 shrink-0">
+                  <textarea
+                    value={task}
+                    onChange={(event) => setTask(event.target.value)}
+                    placeholder="询问本项目，例如：我们公司能投吗？最容易废标的三项是什么？"
+                    className="min-h-24 w-full rounded-xl border border-black/10 bg-[#f7f8f9] p-3 text-xs leading-5 outline-none focus:border-black/30"
+                  />
+                  <button
+                    onClick={askAgent}
+                    type="button"
+                    disabled={running || askingAgent || !task.trim()}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-black/10 px-4 py-3 text-sm font-medium disabled:opacity-50"
+                  >
+                    <Sparkles size={16} />
+                    {askingAgent ? "Agent 正在分析…" : "发送"}
+                  </button>
+                </div>
               </div>
             )}
             {!result && uploadedFiles.length > 0 && (
@@ -517,6 +674,66 @@ export function TenderAgentWorkspace() {
         </div>
         <PortfolioNarrative />
       </div>
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 bg-black/20 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="历史项目">
+          <div className="ml-auto flex h-full w-full max-w-md flex-col rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-medium">历史项目</p>
+                <p className="mt-1 text-xs text-neutral-500">仅保存在当前浏览器，可随时恢复继续分析。</p>
+              </div>
+              <button type="button" onClick={() => setHistoryOpen(false)} aria-label="关闭历史项目" className="rounded-full p-2 text-neutral-500 hover:bg-black/5">
+                <X size={18} />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => { beginNewSession(true); setHistoryOpen(false); }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-medium"
+            >
+              <Plus size={16} /> 新建项目
+            </button>
+            <label className="mt-4 flex items-center gap-2 rounded-xl border border-black/10 bg-[#f7f8f9] px-3 py-2 text-neutral-500">
+              <Search size={15} />
+              <input
+                value={historyQuery}
+                onChange={(event) => setHistoryQuery(event.target.value)}
+                placeholder="搜索项目名称、编号或采购人"
+                className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
+              />
+            </label>
+            <div className="tender-chat-scroll mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+              {filteredHistoryProjects.map((project) => (
+                <article key={project.projectId} className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4 text-xs">
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { const session = getTenderProjectSession(project.projectId); if (session) { restoreProjectSession(session); setHistoryOpen(false); } }}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="truncate font-medium text-neutral-900">{project.projectName}</p>
+                      <p className="mt-1 text-neutral-500">{project.projectNumber} · {project.purchaser}</p>
+                      <p className="mt-2 text-neutral-500">{project.files.length} 个文件 · {project.status === "completed" ? "已完成" : project.status === "needs_review" || project.status === "draft" ? "待补充" : project.status === "analyzing" ? "分析中" : "分析失败"}</p>
+                      <p className="mt-1 text-[11px] text-neutral-400">最后分析：{project.lastAnalyzedAt ? new Date(project.lastAnalyzedAt).toLocaleString("zh-CN") : "尚未分析"}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteProject(project.projectId, project.projectName)}
+                      aria-label={`删除 ${project.projectName}`}
+                      className="shrink-0 rounded-full p-2 text-neutral-400 hover:bg-white hover:text-red-700"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!filteredHistoryProjects.length && (
+                <p className="py-10 text-center text-xs text-neutral-400">暂无匹配的项目历史。</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {result && (
         <TraceDrawer
           result={result}
