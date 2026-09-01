@@ -22,6 +22,7 @@ import type {
   ScoringAnalysis,
   TenderAgentRequest,
   TenderAgentResult,
+  TaskCompletion,
   TenderRequirement,
   TenderRisk,
   TenderSource,
@@ -621,6 +622,7 @@ type State = {
   solution?: TenderAgentResult["solution"];
   finalAnswer?: string;
   finalAnswerStatus: TenderAgentResult["finalAnswerStatus"];
+  finalAnswerError?: string;
   scoringAnalysis?: ScoringAnalysis[];
   deepSeekToolCalls: number;
   currentDecisionSource: "llm" | "rule" | "fallback";
@@ -928,12 +930,32 @@ async function deepSeekChoice(
     return { error: `DeepSeek tool choice 请求失败：${detail}` };
   }
 }
-async function composeGroundedResponse(
-  state: State,
-): Promise<
-  { answer: string; suggestions: Record<string, string> } | undefined
-> {
-  if (!process.env.DEEPSEEK_API_KEY || !state.document) return undefined;
+type GroundedResponse = { answer: string; suggestions: Record<string, string> };
+type GroundedResponseAttempt = { output?: GroundedResponse; error?: string; raw?: string };
+export function parseGroundedResponse(raw: string): GroundedResponseAttempt {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
+  const candidates = [cleaned]; let start = cleaned.indexOf("{"); let depth = 0; let quoted = false; let escaped = false;
+  for (let index = start; index >= 0 && index < cleaned.length; index++) {
+    const char = cleaned[index];
+    if (quoted) { if (escaped) escaped = false; else if (char === "\\") escaped = true; else if (char === '"') quoted = false; continue; }
+    if (char === '"') { quoted = true; continue; }
+    if (char === "{") depth++;
+    if (char === "}" && --depth === 0) { candidates.push(cleaned.slice(start, index + 1)); break; }
+  }
+  for (const candidate of candidates) {
+    try {
+      const value = JSON.parse(candidate) as { answer?: unknown; suggestions?: unknown };
+      if (typeof value.answer !== "string" || !value.answer.trim()) continue;
+      const suggestions = typeof value.suggestions === "object" && value.suggestions && !Array.isArray(value.suggestions)
+        ? Object.fromEntries(Object.entries(value.suggestions).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())))
+        : {};
+      return { output: { answer: value.answer.trim().slice(0, 5000), suggestions } };
+    } catch { /* Try the JSON object extracted from surrounding prose. */ }
+  }
+  return { error: "DeepSeek 返回内容不是符合 schema 的 JSON 对象，或缺少核心 answer 字段。", raw: cleaned.slice(0, 6000) };
+}
+async function composeGroundedResponse(state: State): Promise<GroundedResponseAttempt> {
+  if (!process.env.DEEPSEEK_API_KEY || !state.document) return { error: "DeepSeek 未配置或招标文本未就绪。" };
   const matches = allMatches(state);
   const evidence = matches
     .flatMap((match) =>
@@ -946,9 +968,27 @@ async function composeGroundedResponse(
       })),
     )
     .slice(0, 30);
-  try {
+  const endpoint = `${(process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com").replace(/\/$/, "")}/chat/completions`;
+  const baseMessages = [
+    {
+      role: "system",
+      content:
+        '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。任何关键证据不足时，明确写“待确认”，并在 answer 中提出需要用户补充的材料。仅返回合法 JSON，不要 Markdown，不要解释。Schema：{"answer":string,"suggestions":{"REQ-ID":string}}。suggestions 为可选对象；每一条 suggestion 必须保留“来源：”并引用给定 sourceId；无证据则写“待确认：当前资料未检索到…”。',
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        task: state.request.task ?? "分析招标文件并形成技术应答",
+        requirements: state.document.requirements.map((item) => ({ id: item.id, category: item.category, requirement: item.requirement })),
+        matches: matches.map((item) => ({ id: item.requirementId, status: item.status, reason: item.reason, evidenceIds: item.evidenceIds })),
+        internalEvidence: evidence,
+        externalEvidence: state.externalVerification.results.map((item) => ({ title: item.title, url: item.url, snippet: item.snippet })).slice(0, 5),
+      }),
+    },
+  ];
+  const request = async (messages: Array<{ role: string; content: string }>) => {
     const response = await fetch(
-      `${(process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com").replace(/\/$/, "")}/chat/completions`,
+      endpoint,
       {
         method: "POST",
         headers: {
@@ -958,38 +998,7 @@ async function composeGroundedResponse(
         body: JSON.stringify({
           model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
           response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content:
-                '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。任何关键证据不足时，明确写‘待确认’，并在 answer 中提出需要用户补充的材料。返回 JSON：{"answer":string,"suggestions":{"REQ-ID":string}}。每一条 suggestion 必须保留‘来源：’并引用给定 sourceId；无证据则写‘待确认：当前资料未检索到…’。',
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                task: state.request.task ?? "分析招标文件并形成技术应答",
-                requirements: state.document.requirements.map((item) => ({
-                  id: item.id,
-                  category: item.category,
-                  requirement: item.requirement,
-                })),
-                matches: matches.map((item) => ({
-                  id: item.requirementId,
-                  status: item.status,
-                  reason: item.reason,
-                  evidenceIds: item.evidenceIds,
-                })),
-                internalEvidence: evidence,
-                externalEvidence: state.externalVerification.results
-                  .map((item) => ({
-                    title: item.title,
-                    url: item.url,
-                    snippet: item.snippet,
-                  }))
-                  .slice(0, 5),
-              }),
-            },
-          ],
+          messages,
           max_tokens: 1400,
           stream: false,
           thinking: { type: "disabled" },
@@ -997,22 +1006,23 @@ async function composeGroundedResponse(
         signal: AbortSignal.timeout(20000),
       },
     );
-    if (!response.ok) return undefined;
+    if (!response.ok) return { error: `DeepSeek 综合结论 HTTP ${response.status}` };
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const raw = data.choices?.[0]?.message?.content;
-    if (!raw) return undefined;
-    const parsed = JSON.parse(
-      raw.replace(/^```json\s*/i, "").replace(/\s*```$/, ""),
-    ) as { answer?: string; suggestions?: Record<string, string> };
-    if (!parsed.answer || !parsed.suggestions) return undefined;
-    return {
-      answer: parsed.answer.slice(0, 5000),
-      suggestions: parsed.suggestions,
-    };
-  } catch {
-    return undefined;
+    return raw ? parseGroundedResponse(raw) : { error: "DeepSeek 综合结论响应为空。" };
+  };
+  try {
+    const first = await request(baseMessages);
+    if (first.output) return first;
+    const repaired = await request([
+      { role: "system", content: '仅返回符合指定 schema 的 JSON，不要 Markdown，不要解释。Schema：{"answer":string,"suggestions":{"REQ-ID":string}}。answer 为必填；suggestions 可省略。' },
+      { role: "user", content: `请修复以下输出：\n${first.raw ?? first.error ?? "无有效 JSON"}` },
+    ]);
+    return repaired.output ? repaired : { error: repaired.error ?? first.error ?? "DeepSeek structured output 修复失败。" };
+  } catch (error) {
+    return { error: `DeepSeek 综合结论请求失败：${error instanceof Error ? error.message : "unknown_error"}` };
   }
 }
 function directAnswer(state: State) {
@@ -1319,11 +1329,12 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
   if (id === "generateTechnicalResponse") {
     const generated = await composeGroundedResponse(state);
     const fallback = solution(allMatches(state));
-    if (generated) {
+    if (generated.output) {
+      const output = generated.output;
       fallback.sections = fallback.sections.map((section) => ({
         ...section,
         responseSuggestion:
-          generated.suggestions[section.title.split("｜")[0]] ||
+          output.suggestions[section.title.split("｜")[0]] ||
           section.responseSuggestion,
       }));
       state.solution = fallback;
@@ -1337,7 +1348,7 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
             ]),
         ).values(),
       );
-      state.finalAnswer = `${generated.answer}${citations.length ? `\n\n证据索引：${citations.join("；")}` : "\n\n待确认：当前没有可引用的内部证据。"}`;
+      state.finalAnswer = `${output.answer}${citations.length ? `\n\n证据索引：${citations.join("；")}` : "\n\n待确认：当前没有可引用的内部证据。"}`;
       state.finalAnswerStatus = "generated";
       state.execution.push(
         step(
@@ -1353,19 +1364,19 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
       );
     } else {
       state.solution = fallback;
-      state.finalAnswer =
-        "AI综合结论生成失败：DeepSeek 未返回可解析的受证据约束结论；规则分析结果仍可查看。";
+      state.finalAnswer = "AI综合结论生成失败：DeepSeek 未返回可解析的受证据约束结论；规则分析结果仍可查看。";
       state.finalAnswerStatus = "failed";
+      state.finalAnswerError = generated.error;
       state.execution.push(
         step(
           state,
           id,
           "已核验内部证据与偏离结论",
-          "DeepSeek 最终应答未成功返回，未伪造生成结果。",
+          `DeepSeek 最终应答未成功返回：${generated.error ?? "unknown_error"}`,
           state.solution.sections.flatMap((item) => item.sources),
-          "not_configured",
+          "failed",
           started,
-          { provider: "deepseek", fallback: "DeepSeek 最终生成不可用" },
+          { provider: "deepseek", fallback: "DeepSeek 最终生成不可用", error: [state.lastDecisionError, generated.error].filter(Boolean).join("；") },
         ),
       );
     }
@@ -1395,6 +1406,30 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
       ),
     );
   }
+}
+
+function completionStatus(step?: ExecutionStep): "completed" | "execution_failed" | "not_applicable" {
+  if (!step) return "not_applicable";
+  return step.status === "completed" ? "completed" : step.status === "failed" ? "execution_failed" : "not_applicable";
+}
+function taskCompletion(document: TenderAgentResult["document"], execution: ExecutionStep[], finalAnswerStatus: TenderAgentResult["finalAnswerStatus"]): TaskCompletion {
+  const step = (id: TenderToolName) => execution.find((item) => item.id === id);
+  const evidenceSteps = execution.filter((item) => ["retrieveCompanyKnowledge", "analyzeQualification", "analyzeTechnicalDeviation", "analyzeScoring"].includes(item.id));
+  const tasks: TaskCompletion["tasks"] = [
+    { id: "parse", label: "招标文件解析", status: completionStatus(step("parseTenderDocument")), detail: "文件解析与项目文本已进入分析链路。" },
+    { id: "ocr", label: "OCR / 文本抽取", status: step("ocrDocument") ? completionStatus(step("ocrDocument")) : "not_applicable", detail: step("ocrDocument") ? "扫描件按需执行 OCR。" : "已获得可靠文本，无需 OCR。" },
+    { id: "requirements", label: "招标要求识别", status: document.requirements.length || step("parseTenderDocument")?.status === "completed" ? "completed" : "execution_failed", detail: `已识别 ${document.requirements.length} 条可分析要求。` },
+    { id: "retrieval", label: "企业资料检索", status: completionStatus(step("retrieveCompanyKnowledge")), detail: step("retrieveCompanyKnowledge") ? "仅检索内部企业资料并保留来源。" : "当前任务未要求企业资料检索。" },
+    { id: "qualification", label: "资格审查", status: completionStatus(step("analyzeQualification")), detail: step("analyzeQualification") ? "逐条输出符合、待确认或证据缺口。" : "当前任务未触发资格审查。" },
+    { id: "technical", label: "技术偏离分析", status: completionStatus(step("analyzeTechnicalDeviation")), detail: step("analyzeTechnicalDeviation") ? "基于已解析条款与 Evidence 完成判断。" : "当前任务未触发技术偏离分析。" },
+    { id: "scoring", label: "评分规则分析", status: document.scoringStatus === "SCORING_FOUND" ? completionStatus(step("analyzeScoring")) : "insufficient_evidence", detail: document.scoringStatus === "SCORING_FOUND" ? "已按结构化评分规则分析。" : "文件未提供可可靠结构化的评分规则，不生成虚构分数。" },
+    { id: "strategy", label: "售前策略生成", status: step("parseTenderDocument")?.status === "completed" ? "completed" : "execution_failed", detail: "风险、评分冲刺、倾向性与竞品策略均按证据或资料不足状态输出。" },
+    { id: "conclusion", label: "综合结论生成", status: finalAnswerStatus === "generated" ? "completed" : finalAnswerStatus === "failed" ? "execution_failed" : "not_applicable", detail: finalAnswerStatus === "failed" ? "DeepSeek structured output 未通过校验或修复。" : "仅在本次任务需要生成综合结论时计入。" },
+    { id: "evidence", label: "Evidence 可追溯结果", status: evidenceSteps.some((item) => item.sources.length) ? "completed" : evidenceSteps.length ? "insufficient_evidence" : "not_applicable", detail: evidenceSteps.some((item) => item.sources.length) ? "结果保留了可展开的来源。" : "当前没有可引用 Evidence，已明确标记资料不足。" },
+  ];
+  const applicable = tasks.filter((item) => item.status === "completed" || item.status === "execution_failed");
+  const score = applicable.length ? Math.round(applicable.filter((item) => item.status === "completed").length / applicable.length * 100) : 0;
+  return { score, status: tasks.some((item) => item.status === "execution_failed") ? "execution_failed" : tasks.some((item) => item.status === "insufficient_evidence") ? "partial" : "completed", tasks };
 }
 
 export async function runTenderAgent(
@@ -1592,6 +1627,8 @@ export async function runTenderAgent(
               : "已完成证据驱动分析；正式投标前仍须复核原始材料。",
     finalAnswer: state.finalAnswer ?? directAnswer(state),
     finalAnswerStatus: state.finalAnswerStatus,
+    finalAnswerError: state.finalAnswerError,
+    taskCompletion: taskCompletion(state.document, state.execution, state.finalAnswerStatus),
     toolCoverage,
     debug,
   };

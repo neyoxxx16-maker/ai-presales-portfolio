@@ -338,6 +338,17 @@ export type AgentDebug = {
     embedding: "enabled" | "disabled";
   };
 };
+export type TaskCompletionItem = {
+  id: string;
+  label: string;
+  status: "completed" | "not_applicable" | "insufficient_evidence" | "execution_failed";
+  detail: string;
+};
+export type TaskCompletion = {
+  score: number;
+  status: "completed" | "partial" | "execution_failed";
+  tasks: TaskCompletionItem[];
+};
 export type TenderAgentResult = {
   document: TenderDocument;
   planner: PlannerOutput;
@@ -368,6 +379,8 @@ export type TenderAgentResult = {
   agentConclusion: string;
   finalAnswer: string;
   finalAnswerStatus: "generated" | "failed" | "not_required";
+  finalAnswerError?: string;
+  taskCompletion: TaskCompletion;
   toolCoverage: AgentToolCoverage[];
   debug?: AgentDebug;
 };
