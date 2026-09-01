@@ -186,6 +186,87 @@ export type TenderRisk = {
   description: string;
   relatedRequirementIds: string[];
 };
+export type PresalesStrategyAnalysis = {
+  competitorAnalysis: {
+    mode: "known_competitors" | "score_based_simulation";
+    summary: string;
+    likelyCompetitionAreas: Array<{
+      dimension: string;
+      scoreWeight: string;
+      competitorLikelyStrategy: string;
+      ourCurrentPosition: string;
+      evidence: TenderSource[];
+      confidence: "high" | "medium" | "low";
+    }>;
+    differentiationStrategies: Array<{
+      strategy: string;
+      targetScoreItem: string;
+      reason: string;
+      expectedBenefit: string;
+      action: string;
+      evidence: TenderSource[];
+    }>;
+    evidence: TenderSource[];
+  };
+  controlRiskAnalysis: {
+    overallRisk: "low" | "medium" | "high";
+    summary: string;
+    suspiciousClauses: Array<{
+      clause: string;
+      category: string;
+      riskLevel: "medium" | "high";
+      reason: string;
+      evidence: TenderSource[];
+      possibleImpact: string;
+      responseStrategy: string;
+      confidence: "medium" | "low";
+    }>;
+    recommendations: string[];
+  };
+  scoreSprint: {
+    totalAvailableScore: number;
+    confirmedScore?: number;
+    potentialScore?: number;
+    summary: string;
+    mustWin: string[];
+    fightFor: string[];
+    lowPriority: string[];
+    difficultOrGiveUp: string[];
+    actions: Array<{
+      priority: "must_win" | "fight_for" | "low_priority" | "difficult";
+      scoreItem: string;
+      availableScore: string;
+      currentStatus: MatchStatus;
+      gap: string;
+      recommendedAction: string;
+      evidence: TenderSource[];
+    }>;
+  };
+  riskRadar: {
+    overallRisk: "low" | "medium" | "high";
+    criticalCount: number;
+    highCount: number;
+    mediumCount: number;
+    risks: Array<{
+      title: string;
+      category: string;
+      severity: "critical" | "high" | "medium" | "low";
+      clause: string;
+      reason: string;
+      consequence: string;
+      recommendation: string;
+      evidence: TenderSource[];
+      status: "confirmed" | "suspected" | "needs_confirmation";
+    }>;
+  };
+  evaluation: {
+    evidenceCoverage: number;
+    completeness: number;
+    uncertaintyHandling: number;
+    unsupportedClaims: number;
+    overallQuality: "A" | "B" | "C" | "D";
+  };
+};
 export type SolutionSection = {
   title: string;
   tenderRequirement: string;
@@ -275,6 +356,7 @@ export type TenderAgentResult = {
   scoringAnalysis: ScoringAnalysis[];
   scoringStatus: ScoringStatus;
   risks: TenderRisk[];
+  presalesStrategy: PresalesStrategyAnalysis;
   solution: { outline: string[]; sections: SolutionSection[] };
   externalVerification: ExternalVerification;
   evidenceConflicts: EvidenceConflict[];

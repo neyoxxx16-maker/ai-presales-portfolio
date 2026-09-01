@@ -48,6 +48,7 @@ type Tab =
   | "qualification"
   | "technical"
   | "scoring"
+  | "strategy"
   | "response"
   | "library";
 type ConversationMessage = ProjectConversationMessage;
@@ -809,6 +810,7 @@ function ResultView({
     ["qualification", "资格审查"],
     ["technical", "技术偏离"],
     ["scoring", "评分分析"],
+    ["strategy", "售前策略"],
     ["response", "技术应答"],
     ["library", "我方资料"],
   ];
@@ -951,6 +953,7 @@ function ResultView({
         </section>
       )}
       {tab === "scoring" && <ScoringView result={result} />}
+      {tab === "strategy" && <PresalesStrategyView result={result} />}
       {tab === "response" && <ResponseView result={result} />}
       {tab === "library" && <LibraryView />}
       <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
@@ -1421,6 +1424,90 @@ function ScoringView({ result }: { result: TenderAgentResult }) {
             {emptyMessage}
           </p>
         )}
+      </div>
+    </section>
+  );
+}
+function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
+  const [section, setSection] = useState<"radar" | "sprint" | "control" | "competitor">("radar");
+  const strategy = result.presalesStrategy;
+  const priorityLabel = {
+    must_win: "必拿分",
+    fight_for: "重点争取",
+    low_priority: "谨慎投入",
+    difficult: "当前难拿",
+  };
+  const severityLabel = { critical: "致命风险", high: "高风险", medium: "中风险", low: "低风险" };
+  const severityStyle = {
+    critical: "bg-red-100 text-red-800",
+    high: "bg-orange-100 text-orange-900",
+    medium: "bg-amber-100 text-amber-900",
+    low: "bg-emerald-100 text-emerald-800",
+  };
+  return (
+    <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-medium">售前策略</p>
+          <p className="mt-1 text-xs leading-6 text-neutral-500">策略结论只基于已解析条款、评分规则与企业 Evidence；不推断真实竞品或最终得分。</p>
+        </div>
+        <div className="rounded-xl bg-[#f7ffe8] px-3 py-2 text-xs text-neutral-700">轻量评估：{strategy.evaluation.overallQuality} 级</div>
+      </div>
+      <div className="mt-5 flex gap-2 overflow-x-auto">
+        {(["radar", "sprint", "control", "competitor"] as const).map((id) => (
+          <button key={id} type="button" onClick={() => setSection(id)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${section === id ? "bg-black text-white" : "bg-[#f7f8f9] text-neutral-600"}`}>
+            {{ radar: "风险雷达", sprint: "评分冲刺", control: "倾向性分析", competitor: "竞品策略" }[id]}
+          </button>
+        ))}
+      </div>
+      {section === "radar" && (
+        <div className="mt-5 space-y-3">
+          <p className="text-xs text-neutral-500">致命 {strategy.riskRadar.criticalCount} 项 · 高风险 {strategy.riskRadar.highCount} 项 · 中风险 {strategy.riskRadar.mediumCount} 项</p>
+          {strategy.riskRadar.risks.map((item, index) => (
+            <article key={`${item.title}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4">
+              <div className="flex items-start justify-between gap-3"><p className="text-sm font-medium">{item.title}</p><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${severityStyle[item.severity]}`}>{severityLabel[item.severity]}</span></div>
+              <p className="mt-2 text-xs leading-6 text-neutral-600">{item.reason}</p>
+              <p className="mt-1 text-xs leading-6 text-neutral-500">影响：{item.consequence}</p>
+              <p className="mt-1 text-xs leading-6 text-neutral-700">建议：{item.recommendation}</p>
+              <Evidence sources={item.evidence} judgment={item.clause} />
+            </article>
+          ))}
+          {!strategy.riskRadar.risks.length && <p className="py-8 text-center text-sm text-neutral-400">未形成需要升级的结构化风险；仍建议人工复核关键条款。</p>}
+        </div>
+      )}
+      {section === "sprint" && (
+        <div className="mt-5 space-y-3">
+          <p className="text-xs leading-6 text-neutral-500">{strategy.scoreSprint.summary} 可确认分：{strategy.scoreSprint.confirmedScore ?? 0} · 可争取分：{strategy.scoreSprint.potentialScore ?? 0} · 可用总分：{strategy.scoreSprint.totalAvailableScore}</p>
+          {strategy.scoreSprint.actions.map((item, index) => (
+            <article key={`${item.scoreItem}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4">
+              <div className="flex items-start justify-between gap-3"><p className="text-sm font-medium">{item.scoreItem}</p><span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-neutral-700">{priorityLabel[item.priority]} · {item.availableScore}</span></div>
+              <p className="mt-2 text-xs leading-6 text-neutral-600">缺口：{item.gap}</p><p className="mt-1 text-xs leading-6 text-neutral-700">行动：{item.recommendedAction}</p>
+              <Evidence sources={item.evidence} />
+            </article>
+          ))}
+          {!strategy.scoreSprint.actions.length && <p className="py-8 text-center text-sm text-neutral-400">暂无可用评分项，未生成虚构分值预测。</p>}
+        </div>
+      )}
+      {section === "control" && (
+        <div className="mt-5 space-y-3">
+          <p className="text-xs leading-6 text-neutral-500">{strategy.controlRiskAnalysis.summary}</p>
+          {strategy.controlRiskAnalysis.suspiciousClauses.map((item, index) => (
+            <article key={`${item.category}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4"><p className="text-sm font-medium">{item.category} · {item.riskLevel === "high" ? "高风险" : "中风险"}</p><p className="mt-2 text-xs leading-6 text-neutral-600">{item.reason}</p><p className="mt-1 text-xs leading-6 text-neutral-700">应对：{item.responseStrategy}</p><Evidence sources={item.evidence} judgment={item.clause} /></article>
+          ))}
+          {!strategy.controlRiskAnalysis.suspiciousClauses.length && <p className="py-8 text-center text-sm text-neutral-400">未发现可由当前文本直接支持的明显倾向性风险。</p>}
+        </div>
+      )}
+      {section === "competitor" && (
+        <div className="mt-5 space-y-3">
+          <p className="text-xs leading-6 text-neutral-500">{strategy.competitorAnalysis.summary}</p>
+          {strategy.competitorAnalysis.likelyCompetitionAreas.map((item, index) => (
+            <article key={`${item.dimension}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4"><p className="text-sm font-medium">{item.dimension} · {item.scoreWeight}</p><p className="mt-2 text-xs leading-6 text-neutral-600">推演：{item.competitorLikelyStrategy}</p><p className="mt-1 text-xs leading-6 text-neutral-700">我方现状：{item.ourCurrentPosition}</p><Evidence sources={item.evidence} /></article>
+          ))}
+          {!strategy.competitorAnalysis.likelyCompetitionAreas.length && <p className="py-8 text-center text-sm text-neutral-400">未解析到结构化评分规则，无法可靠推演竞品策略。</p>}
+        </div>
+      )}
+      <div className="mt-5 grid gap-2 border-t border-black/5 pt-4 text-xs text-neutral-600 sm:grid-cols-4">
+        <p>Evidence：{strategy.evaluation.evidenceCoverage}%</p><p>模块完整：{strategy.evaluation.completeness}%</p><p>不确定性：{strategy.evaluation.uncertaintyHandling}%</p><p>无依据结论：{strategy.evaluation.unsupportedClaims} 项</p>
       </div>
     </section>
   );

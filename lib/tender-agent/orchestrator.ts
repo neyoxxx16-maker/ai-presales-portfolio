@@ -17,6 +17,7 @@ import type {
   KnowledgeRecord,
   MatchStatus,
   ParsedBidDocument,
+  PresalesStrategyAnalysis,
   RequirementMatch,
   ScoringAnalysis,
   TenderAgentRequest,
@@ -401,6 +402,208 @@ function scoring(
       manualReviewRequired: subjective || !match || match.status !== "PASS",
     };
   });
+}
+function scoringDimension(value: string) {
+  if (/案例|业绩/.test(value)) return "历史案例与业绩";
+  if (/资质|认证|证书/.test(value)) return "企业资质";
+  if (/服务|售后|SLA/.test(value)) return "服务能力";
+  if (/实施|交付|项目经理/.test(value)) return "实施方案与团队";
+  if (/价格|报价/.test(value)) return "报价策略";
+  if (/演示|POC|答辩/.test(value)) return "演示 / POC / 答辩";
+  return /参数|技术|方案/.test(value) ? "技术参数与方案" : "评分规则要求";
+}
+function competitorStrategy(dimension: string) {
+  return `成熟竞品可能围绕${dimension}补齐高分材料并强化可验证成果。`;
+}
+function radarCategory(requirement: RequirementMatch) {
+  const text = `${requirement.category} ${requirement.requirement}`;
+  if (/废标|无效投标|否决/.test(text)) return "废标 / 一票否决风险";
+  if (/资格|资质|认证|证书/.test(text)) return "资格条件风险";
+  if (/案例|业绩/.test(text)) return "案例 / 业绩不足";
+  if (/付款|回款/.test(text)) return "付款条件风险";
+  if (/保证金|履约/.test(text)) return "保证金 / 履约要求";
+  if (/合同|违约|赔偿|责任/.test(text)) return "合同责任风险";
+  if (/验收/.test(text)) return "验收条件风险";
+  if (/SLA|响应|售后/.test(text)) return "售后 SLA 风险";
+  if (/交付|实施|工期|周期/.test(text)) return "交付周期风险";
+  if (/商务|价格|报价/.test(text)) return "商务条件风险";
+  return requirement.category === "技术偏离" ? "技术参数风险" : `${requirement.category}风险`;
+}
+function controlRiskAnalysis(
+  document: TenderAgentResult["document"],
+): PresalesStrategyAnalysis["controlRiskAnalysis"] {
+  const clauses = [
+    ...document.requirements.map((item) => ({ clause: item.requirement, source: item.source })),
+    ...document.scoringRules.map((item) => ({ clause: item.description, source: item.source })),
+  ];
+  const suspiciousClauses = clauses.flatMap(({ clause, source }) => {
+    const categories: Array<{ category: string; reason: string; high?: boolean }> = [];
+    if (/指定品牌|指定厂商|仅限.{0,16}(?:品牌|厂商|产品|服务)|华为|阿里云|腾讯云|深信服|H3C|思科/.test(clause))
+      categories.push({ category: "特定品牌或厂商指向", reason: "条款出现特定品牌、厂商或限定采购对象，需核验是否允许等效替代。", high: true });
+    if (/唯一|独有|专利|私有协议|指定接口|排他|不得替代|仅支持/.test(clause))
+      categories.push({ category: "排他性技术要求", reason: "条款含唯一、私有或排他性表述，可能压缩等效方案的竞争空间。", high: true });
+    if (/(?:案例|业绩).{0,24}(?:[5-9]|\d{2,})\s*(?:个|项)|(?:[5-9]|\d{2,})\s*(?:个|项).{0,24}(?:案例|业绩)/.test(clause))
+      categories.push({ category: "异常高案例门槛", reason: "较高的案例数量门槛可能提高新进入者参与难度，需结合项目规模核验必要性。" });
+    if (/CMMI\s*[45]|多项.{0,20}(?:认证|资质)|同时具备.{0,30}(?:认证|资质)/i.test(clause))
+      categories.push({ category: "资质组合门槛", reason: "多项或高等级资质组合可能形成较高准入门槛，需核验与项目需求的关联度。" });
+    if (/本地|属地|注册地|本市|本省|当地/.test(clause))
+      categories.push({ category: "地域限制", reason: "条款含地域或属地限定，建议核验是否存在可接受的服务响应替代证明。" });
+    if (/精度|误差|≤|±|兼容.{0,20}(?:生态|平台)/.test(clause))
+      categories.push({ category: "窄参数或生态依赖", reason: "参数精度或兼容生态要求可能形成倾向性组合，建议开展等价技术证明。" });
+    return categories.map((item) => ({
+      clause,
+      category: item.category,
+      riskLevel: item.high ? "high" as const : "medium" as const,
+      reason: `疑似倾向性：${item.reason}`,
+      evidence: [source],
+      possibleImpact: "可能增加响应、授权或等价证明成本；不代表已构成违法控标。",
+      responseStrategy: "准备技术等价证明，梳理偏离点，并在投标前通过澄清或质疑程序核验。",
+      confidence: "medium" as const,
+    }));
+  });
+  const overallRisk = suspiciousClauses.some((item) => item.riskLevel === "high") ? "high" : suspiciousClauses.length ? "medium" : "low";
+  return {
+    overallRisk,
+    summary: suspiciousClauses.length
+      ? "以下为基于原始条款的倾向性风险识别，均为疑似风险，不构成违法控标结论。"
+      : "未发现可由当前文本直接支持的明显倾向性组合；仍建议人工复核关键参数。",
+    suspiciousClauses,
+    recommendations: suspiciousClauses.length
+      ? ["核验等效替代空间与条款必要性。", "提前准备兼容、授权或技术等价证明。"]
+      : ["保留原始条款与参数响应矩阵，投标前完成合规复核。"],
+  };
+}
+function presalesStrategyAnalysis(
+  document: TenderAgentResult["document"],
+  matches: RequirementMatch[],
+  scoringAnalysis: ScoringAnalysis[],
+): PresalesStrategyAnalysis {
+  const controlRisk = controlRiskAnalysis(document);
+  const likelyCompetitionAreas = scoringAnalysis.map((item) => {
+    const dimension = scoringDimension(`${item.item} ${item.scoringRules.join(" ")}`);
+    return {
+      dimension,
+      scoreWeight: item.maxScore,
+      competitorLikelyStrategy: competitorStrategy(dimension),
+      ourCurrentPosition: item.status === "PASS" ? "已有可核验证据，仍需复核适用范围。" : "资料未提供 / 待确认，不应默认满足。",
+      evidence: [...item.bidEvidence, ...item.companyEvidence],
+      confidence: item.confidence,
+    };
+  });
+  const actions = scoringAnalysis.map((item) => {
+    const available = number(item.maxScore);
+    const priority = item.status === "PASS" && available >= 3
+      ? "must_win" as const
+      : item.status === "PENDING"
+        ? "fight_for" as const
+        : available <= 3
+          ? "low_priority" as const
+          : "difficult" as const;
+    const gap = item.status === "PASS" ? "证据已覆盖，需复核原件、有效期和适用范围。" : item.reason;
+    return {
+      priority,
+      scoreItem: item.item,
+      availableScore: item.maxScore,
+      currentStatus: item.status,
+      gap,
+      recommendedAction: priority === "must_win"
+        ? "列入投标前必检清单，确保每份证明材料与评分条款一一对应。"
+        : priority === "fight_for"
+          ? "优先补齐可核验证据，并突出行业相似度、实施成果或交付能力。"
+          : priority === "low_priority"
+            ? "评估办理周期与成本后再投入，避免挤占高分关键项资源。"
+            : "当前缺口较大，评估是否存在可验证替代材料；无依据时不承诺得分。",
+      evidence: [...item.bidEvidence, ...item.companyEvidence],
+    };
+  });
+  const totalAvailableScore = scoringAnalysis.reduce((total, item) => total + number(item.maxScore), 0);
+  const confirmedScore = scoringAnalysis.filter((item) => item.status === "PASS" && !item.manualReviewRequired).reduce((total, item) => total + number(item.maxScore), 0);
+  const potentialScore = scoringAnalysis.filter((item) => item.status === "PENDING").reduce((total, item) => total + number(item.maxScore), 0);
+  const baseRisks = matches.filter((item) => item.status !== "PASS").map((item) => {
+    const severity = item.mandatory && (item.status === "FAIL" || item.status === "MISSING_EVIDENCE")
+      ? "critical" as const
+      : item.risk === "HIGH" ? "high" as const : item.risk === "MEDIUM" ? "medium" as const : "low" as const;
+    return {
+      title: severity === "critical" ? "可能直接废标或资格失效" : radarCategory(item),
+      category: radarCategory(item),
+      severity,
+      clause: item.requirement,
+      reason: item.reason,
+      consequence: severity === "critical" ? "可能导致资格不通过或直接废标。" : "可能影响响应完整性、评分或交付承诺。",
+      recommendation: item.suggestedAction,
+      evidence: item.evidence,
+      status: item.status === "FAIL" ? "confirmed" as const : "needs_confirmation" as const,
+    };
+  });
+  const controlRisks = controlRisk.suspiciousClauses.map((item) => ({
+    title: "倾向性 / 排他风险",
+    category: item.category,
+    severity: item.riskLevel === "high" ? "high" as const : "medium" as const,
+    clause: item.clause,
+    reason: item.reason,
+    consequence: item.possibleImpact,
+    recommendation: item.responseStrategy,
+    evidence: item.evidence,
+    status: "suspected" as const,
+  }));
+  const scoreRisks = actions.filter((item) => item.priority === "difficult" || item.priority === "fight_for").map((item) => ({
+    title: "评分失分风险",
+    category: "评分标准",
+    severity: item.priority === "difficult" ? "high" as const : "medium" as const,
+    clause: item.scoreItem,
+    reason: item.gap,
+    consequence: `可能损失 ${item.availableScore} 对应的可争取分。`,
+    recommendation: item.recommendedAction,
+    evidence: item.evidence,
+    status: "needs_confirmation" as const,
+  }));
+  const radarRisks = [...baseRisks, ...controlRisks, ...scoreRisks].sort((left, right) => ({ critical: 0, high: 1, medium: 2, low: 3 })[left.severity] - ({ critical: 0, high: 1, medium: 2, low: 3 })[right.severity]);
+  const criticalCount = radarRisks.filter((item) => item.severity === "critical").length;
+  const highCount = radarRisks.filter((item) => item.severity === "high").length;
+  const mediumCount = radarRisks.filter((item) => item.severity === "medium").length;
+  const conclusionSources = [...likelyCompetitionAreas.flatMap((item) => item.evidence), ...radarRisks.flatMap((item) => item.evidence)];
+  const evidenceCoverage = Math.round((conclusionSources.length ? conclusionSources.filter((item) => item.quote || item.excerpt).length / conclusionSources.length : 1) * 100);
+  const uncertaintyTargets = [...matches.filter((item) => item.status !== "PASS"), ...scoringAnalysis.filter((item) => item.status !== "PASS")];
+  const uncertaintyHandling = Math.round((uncertaintyTargets.length ? uncertaintyTargets.filter((item) => /待确认|资料|未找到|不宜/.test(item.reason)).length / uncertaintyTargets.length : 1) * 100);
+  const unsupportedClaims = radarRisks.filter((item) => ["critical", "high"].includes(item.severity) && !item.evidence.length).length;
+  const completeness = document.scoringRules.length || matches.length ? 100 : 50;
+  const overallQuality = unsupportedClaims > 0 || evidenceCoverage < 60 ? "D" : evidenceCoverage >= 85 && uncertaintyHandling >= 85 && completeness === 100 ? "A" : evidenceCoverage >= 70 ? "B" : "C";
+  return {
+    competitorAnalysis: {
+      mode: "score_based_simulation",
+      summary: likelyCompetitionAreas.length ? "基于评分规则的竞品策略推演；未识别真实竞品名单，不生成具体公司名称。" : "当前未解析到结构化评分规则，暂不推演具体竞品得分策略。",
+      likelyCompetitionAreas,
+      differentiationStrategies: actions.filter((item) => item.priority !== "low_priority").map((item) => ({
+        strategy: `围绕“${item.scoreItem}”形成可验证差异化材料。`,
+        targetScoreItem: item.scoreItem,
+        reason: item.gap,
+        expectedBenefit: `提升该项 ${item.availableScore} 的可争取空间，不预测最终得分。`,
+        action: item.recommendedAction,
+        evidence: item.evidence,
+      })),
+      evidence: likelyCompetitionAreas.flatMap((item) => item.evidence),
+    },
+    controlRiskAnalysis: controlRisk,
+    scoreSprint: {
+      totalAvailableScore,
+      confirmedScore,
+      potentialScore,
+      summary: actions.length ? "按证据覆盖、分值和补齐难度分层；可确认分不等于最终评审得分。" : "未解析到可用评分项，暂不生成分值预测。",
+      mustWin: actions.filter((item) => item.priority === "must_win").map((item) => item.scoreItem),
+      fightFor: actions.filter((item) => item.priority === "fight_for").map((item) => item.scoreItem),
+      lowPriority: actions.filter((item) => item.priority === "low_priority").map((item) => item.scoreItem),
+      difficultOrGiveUp: actions.filter((item) => item.priority === "difficult").map((item) => item.scoreItem),
+      actions,
+    },
+    riskRadar: {
+      overallRisk: criticalCount || highCount ? "high" : mediumCount ? "medium" : "low",
+      criticalCount,
+      highCount,
+      mediumCount,
+      risks: radarRisks,
+    },
+    evaluation: { evidenceCoverage, completeness, uncertaintyHandling, unsupportedClaims, overallQuality },
+  };
 }
 
 type State = {
@@ -1275,6 +1478,8 @@ export async function runTenderAgent(
         item.id === "analyzeTechnicalDeviation",
     ),
   );
+  const scoringAnalysis = state.scoringAnalysis ?? scoring(state.document.scoringRules, matches);
+  const presalesStrategy = presalesStrategyAnalysis(state.document, matches, scoringAnalysis);
   const finalSolution = state.solution ?? solution(matches);
   const usedToolCalling = state.deepSeekToolCalls > 0;
   const allTools = Object.keys(labels) as TenderToolName[];
@@ -1357,10 +1562,10 @@ export async function runTenderAgent(
       failed: analysisSummary.failCount,
     },
     analysisSummary,
-    scoringAnalysis:
-      state.scoringAnalysis ?? scoring(state.document.scoringRules, matches),
+    scoringAnalysis,
     scoringStatus: state.document.scoringStatus,
     risks: risks(matches),
+    presalesStrategy,
     solution: finalSolution,
     externalVerification: state.externalVerification,
     evidenceConflicts,
