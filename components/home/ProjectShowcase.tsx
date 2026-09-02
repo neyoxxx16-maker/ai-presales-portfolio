@@ -30,11 +30,12 @@ export function ProjectShowcase() {
           <p className="max-w-md text-sm leading-7 text-neutral-500">一个偏对话式知识服务，一个偏工作流自动化，分别证明不同的售前方案能力。</p>
         </div>
 
-        <div className="mt-12 grid gap-5 lg:grid-cols-2">
+        <div data-reveal-group className="mt-14 grid gap-5 lg:mt-16 lg:grid-cols-2">
           {projects.map((project) => (
             <Link
               href={project.href}
               key={project.title}
+              data-reveal-item
               className="group rounded-[28px] border border-black/5 bg-white p-7 transition duration-300 hover:-translate-y-1 hover:shadow-soft sm:p-8"
             >
               <div className="flex items-center justify-between">

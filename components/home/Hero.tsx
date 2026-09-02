@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Database, Download, FileCheck2, Search, Workflow, Wrench } from "lucide-react";
-import { siteConfig } from "@/lib/site-config";
+import { ArrowRight, Database, FileCheck2, Search, Workflow, Wrench } from "lucide-react";
 
 const tags = [
   { label: "RAG", icon: Search },
@@ -12,7 +11,7 @@ const tags = [
 
 export function Hero() {
   return (
-    <section className="mx-auto max-w-[1440px] px-3 pt-5 sm:px-4 lg:px-5">
+    <section className="mx-auto max-w-[1520px] px-2 pt-5 sm:px-3 lg:px-4">
       <div className="sky-panel min-h-[720px] rounded-[30px] px-6 py-7 text-white shadow-soft sm:px-10 lg:min-h-[calc(100svh-106px)] lg:px-14 lg:py-10">
         <div className="relative z-10 flex min-h-[660px] flex-col lg:min-h-[calc(100svh-166px)]">
           <div className="flex items-center justify-between text-xs font-medium tracking-[0.14em] text-white/85">
@@ -22,43 +21,32 @@ export function Hero() {
 
           <div className="mx-auto mt-24 max-w-4xl text-center lg:mt-28">
             <p className="mb-5 text-sm font-medium text-white/80">AI售前 / 解决方案工程师</p>
-            <h1 className="text-balance text-5xl font-medium leading-[1.1] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+            <h1 data-hero-reveal className="text-balance text-5xl font-medium leading-[1.13] tracking-[-0.018em] sm:text-6xl lg:text-7xl">
               把 AI 能力变成真正
               <br />
               可落地的解决方案
             </h1>
-            <p className="mx-auto mt-7 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
+            <p data-hero-reveal className="mx-auto mt-7 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
               从需求澄清、架构设计到可交互 Demo 与 POC 验证，
               用可见的产品体验解释 RAG、Agent 与 Function Calling 的业务价值。
             </p>
 
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <div data-hero-reveal className="mt-8 flex flex-wrap justify-center gap-3">
               <Link href="/demo/tea-assistant" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">
-                体验 AI 导购 <ArrowRight size={16} />
+                体验 AI 导购 <ArrowRight className="button-arrow" size={16} />
               </Link>
               <Link href="/resume" className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/15 px-5 py-3 text-sm font-medium text-white backdrop-blur">
                 查看在线简历
               </Link>
               <Link href="/solutions" className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/15 px-5 py-3 text-sm font-medium text-white backdrop-blur">
-                查看方案成果 <ArrowRight size={16} />
+                查看方案成果 <ArrowRight className="button-arrow" size={16} />
               </Link>
-            </div>
-            <div className="mt-4 flex flex-wrap justify-center gap-2.5 text-sm">
-              <a href={siteConfig.links.resumePdf} download className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2.5 font-medium text-white transition hover:bg-black/80">
-                下载 PDF 简历 <Download size={14} />
-              </a>
-              <a href={siteConfig.links.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
-                GitHub <ArrowUpRight size={14} />
-              </a>
-              <a href={siteConfig.links.email} className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
-                发送邮件 <ArrowUpRight size={14} />
-              </a>
             </div>
           </div>
 
-          <div className="mt-auto grid gap-3 pt-20 sm:grid-cols-2 lg:grid-cols-5">
+          <div data-reveal-group className="mt-auto grid gap-3 pt-20 sm:grid-cols-2 lg:grid-cols-5">
             {tags.map(({ label, icon: Icon }) => (
-              <div key={label} className="hero-skill-card flex items-center justify-between rounded-2xl px-4 py-4 text-black shadow-sm">
+              <div data-reveal-item key={label} className="flex items-center justify-between rounded-2xl bg-white px-4 py-4 text-black">
                 <span className="text-sm font-medium">{label}</span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#c7ff4d]">
                   <Icon size={15} />

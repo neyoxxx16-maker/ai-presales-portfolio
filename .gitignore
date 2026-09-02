@@ -1,5 +1,8 @@
 node_modules/
 .next/
+.next-build-check/
+tmp/
+source-materials/private-documents/
 *.tsbuildinfo
 *.log
 .env

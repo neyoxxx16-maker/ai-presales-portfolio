@@ -16,10 +16,10 @@ export function SolutionOverview() {
             <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">先理解需求，再给出带有来源依据的商品建议。</h2>
             <p className="mt-5 text-sm leading-7 text-neutral-500">当前为 POC：价格、SKU 与推荐边界仍由规则引擎确定；实时 RAG 仅用于有来源的知识解释，并可安全回退。</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">
+          <div data-reveal-group className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">
             {steps.map(([no, title, desc, Icon], index) => (
               <div key={title} className="contents">
-                <article className="rounded-[24px] border border-black/5 bg-white p-6"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#c7ff4d]"><Icon size={17} /></span><p className="mt-10 text-xs font-semibold tracking-[0.16em] text-neutral-400">{no}</p><h3 className="mt-3 text-xl font-medium tracking-[-0.03em]">{title}</h3><p className="mt-3 text-sm leading-7 text-neutral-500">{desc}</p></article>
+                <article data-reveal-item className="rounded-[24px] border border-black/5 bg-white p-6"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#c7ff4d]"><Icon size={17} /></span><p className="mt-10 text-xs font-semibold tracking-[0.16em] text-neutral-400">{no}</p><h3 className="mt-3 text-xl font-medium tracking-[-0.03em]">{title}</h3><p className="mt-3 text-sm leading-7 text-neutral-500">{desc}</p></article>
                 {index < steps.length - 1 && <div className="hidden items-center justify-center text-neutral-400 sm:flex"><ArrowDown className="rotate-[-90deg]" size={18} /></div>}
               </div>
             ))}

@@ -112,9 +112,10 @@ export function ResumeContent() {
             <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">围绕售前完整链路组织能力，而不是简单堆叠技术栈</h2>
           </div>
 
-          <div className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-white md:grid-cols-2">
+          <div data-reveal-group className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-white md:grid-cols-2">
             {capabilities.map(({ icon: Icon, title, desc }, index) => (
               <article
+                data-reveal-item
                 key={title}
                 className={`min-h-[270px] p-7 sm:p-8 ${index % 2 === 0 ? "md:border-r md:border-black/5" : ""} ${index < 2 ? "border-b border-black/5" : index === 2 ? "border-b border-black/5 md:border-b-0" : ""}`}
               >
@@ -140,9 +141,9 @@ export function ResumeContent() {
           </p>
         </div>
 
-        <div className="mt-12 space-y-5">
+        <div data-reveal-group className="mt-12 space-y-5">
           {projects.map((project) => (
-            <article key={project.name} className="rounded-[28px] border border-black/5 bg-[#f7f8f9] p-6 sm:p-8 lg:p-10">
+            <article data-reveal-item key={project.name} className="rounded-[28px] border border-black/5 bg-[#f7f8f9] p-6 sm:p-8 lg:p-10">
               <div className="grid gap-8 lg:grid-cols-[0.55fr_1.45fr] lg:gap-14">
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between">

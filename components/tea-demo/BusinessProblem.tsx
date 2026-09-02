@@ -13,9 +13,9 @@ export function BusinessProblem() {
         <p className="section-kicker">业务背景与痛点</p>
         <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">当产品知识散落在资料里，服务体验就很难稳定。</h2>
       </div>
-      <div className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-[#f7f8f9] lg:grid-cols-3">
+      <div data-reveal-group className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-[#f7f8f9] lg:grid-cols-3">
         {problems.map(([no, title, desc, Icon], index) => (
-          <article key={title} className={`min-h-[300px] p-7 sm:p-8 ${index < 2 ? "border-b border-black/5 lg:border-b-0 lg:border-r" : ""}`}>
+          <article data-reveal-item key={title} className={`min-h-[300px] p-7 sm:p-8 ${index < 2 ? "border-b border-black/5 lg:border-b-0 lg:border-r" : ""}`}>
             <div className="flex items-center justify-between"><span className="text-xs font-semibold tracking-[0.18em] text-neutral-400">{no}</span><Icon size={18} /></div>
             <h3 className="mt-20 text-2xl font-medium tracking-[-0.035em]">{title}</h3>
             <p className="mt-3 text-sm leading-7 text-neutral-500">{desc}</p>

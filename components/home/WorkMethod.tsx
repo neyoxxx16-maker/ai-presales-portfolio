@@ -14,9 +14,9 @@ export function WorkMethod() {
         <p className="mt-5 text-base leading-8 text-neutral-500">售前 Demo 的价值，不是炫技，而是让客户看见“这项能力怎么解决我的问题”。</p>
       </div>
 
-      <div className="mt-14 grid overflow-hidden rounded-[28px] border border-black/5 bg-[#f7f8f9] md:grid-cols-2 lg:grid-cols-4">
+      <div data-reveal-group className="mt-14 grid overflow-hidden rounded-[28px] border border-black/5 bg-[#f7f8f9] md:grid-cols-2 lg:grid-cols-4">
         {steps.map(([index, title, desc], i) => (
-          <article key={title} className={`min-h-[250px] p-7 ${i !== steps.length - 1 ? "border-b border-black/5 lg:border-b-0 lg:border-r" : ""}`}>
+          <article data-reveal-item key={title} className={`min-h-[250px] p-7 ${i !== steps.length - 1 ? "border-b border-black/5 lg:border-b-0 lg:border-r" : ""}`}>
             <div className="flex h-full flex-col">
               <span className="text-xs font-semibold tracking-[0.15em] text-neutral-400">{index}</span>
               <h3 className="mt-auto pt-16 text-2xl font-medium tracking-[-0.035em]">{title}</h3>
