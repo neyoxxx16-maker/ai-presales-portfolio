@@ -25,7 +25,7 @@ export function ProjectShowcase() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="section-kicker">核心项目</p>
-            <h2 className="mt-4 max-w-3xl text-4xl font-medium tracking-[-0.045em] sm:text-5xl">不是两张项目介绍图，而是两个可以现场体验的 AI 场景</h2>
+            <h2 className="mt-4 max-w-3xl text-4xl font-medium tracking-[-0.045em] sm:text-5xl">不是两张项目介绍图，而是两个可现场体验的 AI 场景</h2>
           </div>
           <p className="max-w-md text-sm leading-7 text-neutral-500">一个偏对话式知识服务，一个偏工作流自动化，分别证明不同的售前方案能力。</p>
         </div>

@@ -13,7 +13,7 @@ export function SolutionOverview() {
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
           <div>
             <p className="section-kicker">解决方案</p>
-            <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">先理解需求，再给出有来源的商品建议。</h2>
+            <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">先理解需求，再给出带有来源依据的商品建议。</h2>
             <p className="mt-5 text-sm leading-7 text-neutral-500">当前为 POC：价格、SKU 与推荐边界仍由规则引擎确定；实时 RAG 仅用于有来源的知识解释，并可安全回退。</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">

@@ -1,30 +1,42 @@
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, MapPin, GraduationCap } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Download, GraduationCap, MapPin } from "lucide-react";
+import { siteConfig } from "@/lib/site-config";
 
 const focusTags = ["需求分析", "RAG", "Agent", "Function Calling", "POC 验证", "Vibe Coding"];
 
 export function ResumeHero() {
   return (
     <section className="mx-auto max-w-7xl px-4 pt-5 sm:px-5 lg:px-8">
-      <div className="sky-panel min-h-[520px] rounded-[30px] px-6 py-7 text-white shadow-soft sm:px-10 lg:px-14 lg:py-10">
-        <div className="relative z-10 flex min-h-[455px] flex-col">
+      <div className="sky-panel min-h-[620px] rounded-[30px] px-6 py-7 text-white shadow-soft sm:px-10 lg:min-h-[calc(100svh-130px)] lg:px-14 lg:py-10">
+        <div className="relative z-10 flex min-h-[555px] flex-col lg:min-h-[calc(100svh-190px)]">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-medium tracking-[0.14em] text-white/85">
             <span>ONLINE RESUME</span>
             <span>AI PRESALES · 2027</span>
           </div>
 
-          <div className="mt-16 grid gap-10 lg:mt-20 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
+          <div className="mt-20 grid gap-10 lg:mt-24 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
             <div>
               <p className="text-sm font-medium text-white/80">黄念红 · AI 售前 / 解决方案工程师</p>
-              <h1 className="mt-4 max-w-4xl text-5xl font-medium leading-[1.02] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-                把业务问题，
+              <h1 className="mt-4 max-w-4xl text-5xl font-medium leading-[1.1] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+                把业务问题整理成
                 <br />
-                变成能验证的 AI 方案
+                可验证的 AI 方案
               </h1>
-              <p className="mt-6 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
+              <p className="mt-7 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
                 数字媒体技术背景，正在围绕 AI 售前方向持续搭建可交互 Demo。
                 关注需求澄清、方案设计、RAG / Agent 落地、POC 测试与面试现场表达。
               </p>
+              <div className="mt-7 flex flex-wrap gap-2.5 text-sm">
+                <a href={siteConfig.links.resumePdf} download className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2.5 font-medium text-white transition hover:bg-black/80">
+                  下载 PDF 简历 <Download size={14} />
+                </a>
+                <a href={siteConfig.links.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
+                  GitHub <ArrowUpRight size={14} />
+                </a>
+                <a href={siteConfig.links.email} className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
+                  发送邮件 <ArrowUpRight size={14} />
+                </a>
+              </div>
             </div>
 
             <div className="glass-card rounded-[26px] p-5 text-black shadow-sm sm:p-6">

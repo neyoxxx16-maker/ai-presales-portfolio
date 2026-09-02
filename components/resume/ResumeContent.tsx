@@ -4,12 +4,11 @@ import {
   BookOpenCheck,
   Braces,
   CheckCircle2,
-  FileText,
   Layers3,
   Route,
   Sparkles,
-  Wrench,
 } from "lucide-react";
+import { siteConfig } from "@/lib/site-config";
 
 const capabilities = [
   {
@@ -80,9 +79,9 @@ export function ResumeContent() {
           <div>
             <p className="section-kicker">个人定位</p>
             <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">
-              我想做的不是“会讲模型”的售前，
+              我想做的，不是“会讲模型”的售前，
               <br className="hidden sm:block" />
-              而是能把方案做出来的人。
+              而是能把方案真正做出来的人。
             </h2>
           </div>
           <div className="lg:pt-8">
@@ -110,7 +109,7 @@ export function ResumeContent() {
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
           <div className="max-w-3xl">
             <p className="section-kicker">核心能力</p>
-            <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">围绕售前完整链路组织能力，而不是堆技术栈</h2>
+            <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">围绕售前完整链路组织能力，而不是简单堆叠技术栈</h2>
           </div>
 
           <div className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-white md:grid-cols-2">
@@ -182,38 +181,11 @@ export function ResumeContent() {
         </div>
       </section>
 
-      <section className="bg-black py-24 text-white lg:py-32">
-        <div className="mx-auto max-w-7xl px-5 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">方案与交付基础</p>
-              <h2 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.045em] sm:text-5xl">技术之外，也能整理信息、做方案并完成交付</h2>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-6">
-                <FileText size={20} className="text-[#c7ff4d]" />
-                <p className="mt-8 text-xl font-medium">商业方案材料</p>
-                <p className="mt-3 text-sm leading-7 text-white/55">
-                  整理并输出华文通数字资产平台业务介绍与一叶春山产品白皮书，两份材料合计 23 页，用于信息梳理、层级组织与商业表达训练。
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-6">
-                <Wrench size={20} className="text-[#c7ff4d]" />
-                <p className="mt-8 text-xl font-medium">Web 开发基础</p>
-                <p className="mt-3 text-sm leading-7 text-white/55">
-                  完成过 Node.js + Express + MySQL 的网站项目，具备基础前后端功能梳理、接口理解与系统演示经验。
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="mx-auto max-w-7xl px-5 py-24 lg:px-8 lg:py-32">
         <div className="grid gap-12 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
           <div>
             <p className="section-kicker">工具能力</p>
-            <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">工具是为了更快把方案做成可以沟通的东西</h2>
+            <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">工具的价值，是让我更快把方案做成可以沟通、可以验证的东西</h2>
           </div>
           <div className="divide-y divide-black/5 rounded-[26px] border border-black/5 bg-[#f7f8f9] px-5 sm:px-7">
             {toolkit.map(([group, items]) => (
@@ -233,13 +205,15 @@ export function ResumeContent() {
               <Sparkles size={16} />
               <p className="text-xs font-semibold tracking-[0.16em] text-neutral-500">PDF RESUME</p>
             </div>
-            <h2 className="mt-4 text-3xl font-medium tracking-[-0.04em]">PDF 简历将在内容定稿后开放下载</h2>
+            <h2 className="mt-4 text-3xl font-medium tracking-[-0.04em]">保持联系，或获取正式 PDF 简历</h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-500">
-              当前先完成网页简历的信息结构，避免放置不存在的下载文件。后续补入正式 PDF 后，这里会直接提供下载入口。
+              网页简历用于快速了解项目与能力；正式 PDF、代码仓库与邮件入口统一在这里提供。
             </p>
           </div>
-          <div className="mt-6 inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm text-neutral-400 lg:mt-0">
-            <FileText size={15} /> PDF 待补充
+          <div className="mt-6 flex flex-wrap gap-3 lg:mt-0">
+            <a href={siteConfig.links.resumePdf} download className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-medium text-white">下载 PDF 简历 <ArrowUpRight size={15} /></a>
+            <a href={siteConfig.links.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium">GitHub <ArrowUpRight size={15} /></a>
+            <a href={siteConfig.links.email} className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium">发送邮件 <ArrowUpRight size={15} /></a>
           </div>
         </div>
       </section>

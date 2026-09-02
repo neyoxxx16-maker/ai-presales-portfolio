@@ -42,11 +42,20 @@ a {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 24% 82%, rgba(255, 255, 255, 0.95) 0 11%, transparent 12%),
-    radial-gradient(circle at 39% 88%, rgba(255, 255, 255, 0.95) 0 16%, transparent 17%),
-    radial-gradient(circle at 56% 84%, rgba(255, 255, 255, 0.92) 0 13%, transparent 14%),
-    radial-gradient(circle at 72% 92%, rgba(255, 255, 255, 0.96) 0 20%, transparent 21%),
-    linear-gradient(180deg, #0f78c7 0%, #46a9ee 58%, #bfe4fb 100%);
+    radial-gradient(ellipse 19% 11% at 7% 96%, rgba(255, 255, 255, 0.88) 0 62%, transparent 100%),
+    radial-gradient(ellipse 22% 14% at 25% 92%, rgba(255, 255, 255, 0.94) 0 62%, transparent 100%),
+    radial-gradient(ellipse 21% 12% at 48% 96%, rgba(255, 255, 255, 0.9) 0 61%, transparent 100%),
+    radial-gradient(ellipse 28% 17% at 72% 94%, rgba(255, 255, 255, 0.95) 0 62%, transparent 100%),
+    radial-gradient(ellipse 19% 12% at 98% 89%, rgba(255, 255, 255, 0.86) 0 62%, transparent 100%),
+    linear-gradient(180deg, #0872c2 0%, #3c9fe8 57%, #bde2f8 100%);
+}
+
+.sky-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 45, 85, 0.24) 0%, rgba(0, 58, 105, 0.1) 42%, transparent 66%);
 }
 
 .sky-panel::after {
@@ -54,13 +63,26 @@ a {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0,0,0,0.05), transparent 40%);
+  background: linear-gradient(180deg, rgba(0,0,0,0.05), transparent 38%), linear-gradient(0deg, rgba(255,255,255,0.15), transparent 28%);
 }
 
 .glass-card {
   backdrop-filter: blur(14px);
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.hero-skill-card {
+  background: rgba(238, 243, 247, 0.96);
+  border: 1px solid rgba(219, 228, 235, 0.95);
+}
+
+.sky-chip {
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(9, 42, 70, 0.28);
+  color: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
 }
 
 .section-kicker {

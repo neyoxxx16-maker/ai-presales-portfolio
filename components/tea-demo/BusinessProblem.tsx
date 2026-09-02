@@ -11,7 +11,7 @@ export function BusinessProblem() {
     <section className="mx-auto max-w-7xl px-5 py-24 lg:px-8 lg:py-32">
       <div className="max-w-3xl">
         <p className="section-kicker">业务背景与痛点</p>
-        <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">当产品知识散落在资料里，服务体验很难稳定。</h2>
+        <h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">当产品知识散落在资料里，服务体验就很难稳定。</h2>
       </div>
       <div className="mt-12 grid overflow-hidden rounded-[28px] border border-black/5 bg-[#f7f8f9] lg:grid-cols-3">
         {problems.map(([no, title, desc, Icon], index) => (
