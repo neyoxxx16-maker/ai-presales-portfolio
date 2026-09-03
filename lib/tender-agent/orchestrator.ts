@@ -310,18 +310,17 @@ function summary(
     readinessScore,
     readinessFormula:
       "应标准备度 =（符合×1 + 待确认×0.5）÷ 可判断要求总数 ×100；资料缺失与明确不符合均不计分，仅表示当前材料准备情况，不代表最终中标概率。",
-    recommendation: !analyzed
-      ? "无法判断"
-      : matches.some((item) => item.mandatory && item.status === "FAIL")
-        ? "不建议参与"
-        : matches.some(
-              (item) => item.mandatory && item.category === "资格审查" && item.status === "MISSING_EVIDENCE",
-            )
-          ? "暂缓决策 / 补资料后判断"
-          : missingEvidenceCount || pendingCount
-            ? "有条件建议参与"
-            : "建议参与",
+    recommendation: tenderRecommendation(matches, analyzed),
   };
+}
+export function tenderRecommendation(matches: RequirementMatch[], analyzed = true) {
+  if (!analyzed || !matches.length) return "暂缓决策";
+  if (matches.some((item) => item.mandatory && item.status === "FAIL")) return "不建议投";
+  const core = matches.filter((item) => item.mandatory && ["资格审查", "技术偏离"].includes(item.category));
+  const confirmedCore = core.filter((item) => item.status === "PASS" || (item.status === "PENDING" && item.evidenceIds.length > 0));
+  const confirmedCapability = matches.some((item) => item.status === "PASS" && ["技术偏离", "实施交付", "商务要求"].includes(item.category));
+  if (core.length && !confirmedCore.length && !confirmedCapability) return "暂缓决策";
+  return matches.some((item) => item.status !== "PASS") ? "有条件可投" : "可投";
 }
 function risks(matches: RequirementMatch[]): TenderRisk[] {
   return matches
@@ -1098,12 +1097,12 @@ function ruleAnalysisConclusion(matches: RequirementMatch[]) {
   const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => ({ qualification: "资格条件", technical: "系统能力", business: "商务响应", delivery: "实施交付", "after-sales": "服务保障", time: "进度安排" })[item.category]))).filter(Boolean).slice(0, 3);
   const gaps = matches.filter((item) => item.status !== "PASS");
   const focus = Array.from(new Set(gaps.map((item) => ({ qualification: "资格条件", technical: "技术能力", business: "商务响应", delivery: "交付安排", "after-sales": "服务保障", time: "进度要求" })[item.category]))).filter(Boolean).slice(0, 3);
-  const judgment = analysis.recommendation === "建议参与" ? "目前建议参与。" : analysis.recommendation === "有条件建议参与" ? "目前可有条件参与。" : analysis.recommendation === "不建议参与" ? "目前不建议参与。" : "目前建议暂缓决策，补齐关键材料后再判断。";
+  const judgment = analysis.recommendation === "可投" ? "当前初步判断：可投。" : analysis.recommendation === "有条件可投" ? "当前初步判断：有条件可投。" : analysis.recommendation === "不建议投" ? "当前初步判断：不建议投。" : "当前初步判断：暂缓决策。";
   const reason = supported.length
     ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但仍有${gaps.length}项关键要求需要核验或补充` : "，整体准备较为充分"}。`
-    : `现有材料尚不足以支撑关键要求判断，仍有${gaps.length || analysis.totalRequirements}项需要核验或补充。`;
+    : `现有材料尚不足以确认核心资格或关键技术能力，仍有${gaps.length || analysis.totalRequirements}项需要核验或补充。`;
   const action = gaps.length
-    ? `建议优先处理${focus.join("、") || "关键资料"}，完成主体和有效性核验后再作最终投标决策。`
+    ? analysis.recommendation === "有条件可投" ? `建议继续推进投标准备，并优先处理${focus.join("、") || "关键资料"}的核验与补齐。` : `建议优先处理${focus.join("、") || "关键资料"}，完成主体和有效性核验后再作最终投标决策。`
     : "建议复核关键证明材料的适用范围后，按既定节奏推进投标准备。";
   return `${judgment}${reason}${action}`.replace(/\s+/g, " ").trim().slice(0, 180);
 }
