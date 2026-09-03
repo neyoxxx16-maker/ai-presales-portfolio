@@ -1102,9 +1102,30 @@ function ruleAnalysisConclusion(matches: RequirementMatch[]) {
     ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但仍有${gaps.length}项关键要求需要核验或补充` : "，整体准备较为充分"}。`
     : `现有材料尚不足以确认核心资格或关键技术能力，仍有${gaps.length || analysis.totalRequirements}项需要核验或补充。`;
   const action = gaps.length
-    ? analysis.recommendation === "有条件可投" ? `建议继续推进投标准备，并优先处理${focus.join("、") || "关键资料"}的核验与补齐。` : `建议优先处理${focus.join("、") || "关键资料"}，完成主体和有效性核验后再作最终投标决策。`
+    ? `建议优先补充${priorityTenderMaterials(gaps).join("、")}，具体逐条清单见下方“建议补充材料”。`
     : "建议复核关键证明材料的适用范围后，按既定节奏推进投标准备。";
-  return `${judgment}${reason}${action}`.replace(/\s+/g, " ").trim().slice(0, 180);
+  return `${judgment}${reason}${action}`.replace(/\s+/g, " ").trim().slice(0, 220);
+}
+export function priorityTenderMaterials(matches: RequirementMatch[]) {
+  const ranked = [...matches].sort((left, right) => Number(right.mandatory) - Number(left.mandatory) || Number(right.risk === "HIGH") - Number(left.risk === "HIGH") || Number(left.status === "MISSING_EVIDENCE") - Number(right.status === "MISSING_EVIDENCE"));
+  const labels: string[] = [];
+  for (const match of ranked) {
+    const text = `${match.requirement} ${match.category}`;
+    const label = /营业执照|主体资格|统一社会信用|投标人资格/.test(text) ? "营业执照/主体资格证明"
+      : /法人|授权|委托|签章/.test(text) ? "法人或授权材料"
+      : /财务|审计|资信|银行/.test(text) ? "财务或资信材料"
+      : /合同|案例|验收|中标|业绩/.test(text) ? "项目案例或业绩证明"
+      : /人员|项目经理|工程师|社保|简历/.test(text) ? "项目人员证明"
+      : /实施|交付|售后|服务|SLA|培训/.test(text) ? "实施或服务材料"
+      : /信用|节能|环保|中小企业|合规|声明/.test(text) ? "合规声明或信用证明"
+      : /技术|参数|规格|功能|性能|测试|认证|ISO|产品/.test(text) ? "核心技术证明"
+      : match.category === "资格审查" ? "关键资格证明"
+      : match.category === "技术偏离" ? "核心技术证明"
+      : "相关证明材料";
+    if (!labels.includes(label)) labels.push(label);
+    if (labels.length === 5) break;
+  }
+  return labels.length ? labels : ["关键证明材料"];
 }
 async function execute(state: State, id: TenderToolName): Promise<void> {
   const started = Date.now();
