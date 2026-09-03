@@ -11,8 +11,8 @@ export type TeaKnowledgeChunk = {
 };
 
 export type TeaVectorIndex = { version: 1; model: string; dimensions: number; chunks: Array<TeaKnowledgeChunk & { embedding: number[] }> };
-export type VectorHit = TeaKnowledgeChunk & { score: number };
-export type RetrievalResult = { hits: VectorHit[]; insufficientContext: boolean };
+export type VectorHit = TeaKnowledgeChunk & { score: number; vectorScore?: number; keywordScore?: number; rrfScore?: number; retrievalMethod?: "VECTOR" | "KEYWORD" | "HYBRID" };
+export type RetrievalResult = { hits: VectorHit[]; insufficientContext: boolean; keywordHits: number; vectorHits: number; hybridActive: boolean };
 export type GroundedOutput = { answer: string; citations: string[]; confidence: "high" | "medium" | "low"; followUp?: string };
 export type RagConfig = { topK: number; threshold: number; timeoutMs: number };
 export type RagRequest = { query: string; intent: TeaIntent; productIds?: string[]; structuredFacts: string[]; allowedCitationIds: string[] };

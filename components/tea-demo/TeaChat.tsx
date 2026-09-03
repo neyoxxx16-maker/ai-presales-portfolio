@@ -22,7 +22,7 @@ export function TeaChat() {
   ]);
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [conversationState, setConversationState] = useState<TeaConversationState>({});
-  const [responseMode, setResponseMode] = useState<"live-rag" | "structured" | "fallback">("structured");
+  const [responseMode, setResponseMode] = useState<"live-rag" | "structured" | "fallback" | "rag-unavailable">("structured");
   const [isSending, setIsSending] = useState(false);
 
   async function submitQuestion() {
@@ -33,7 +33,17 @@ export function TeaChat() {
       priorAnswers: messages.flatMap((message) => message.answer ? [message.answer] : []).slice(-6),
     };
     setIsSending(true);
+    const submittedAt = performance.now();
     let turn = processTeaTurn(question, conversationState, conversationContext);
+    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: question }]);
+    setSteps([
+      { label: "接收用户问题", detail: "已收到本轮输入", status: "completed" },
+      { label: "识别需求", detail: "正在完成本地意图与条件识别", status: "pending" },
+      { label: "检索项目资料", detail: "正在检索已缓存的知识索引", status: "pending" },
+      { label: "匹配商品与规则", detail: "等待检索结果", status: "pending" },
+      { label: "生成回答", detail: "等待模型或结构化结果", status: "pending" },
+      { label: "返回参考资料", detail: "等待引用整理", status: "pending" },
+    ]);
     try {
       const response = await fetch("/api/tea-assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, conversationState, conversationContext }) });
       if (response.ok) turn = await response.json();
@@ -41,16 +51,13 @@ export function TeaChat() {
       // 网络或服务端不可用时继续使用本地 Phase 3.5 规则结果。
     }
     const answer = turn.answer;
-    setMessages((current) => [
-      ...current,
-      { id: `user-${Date.now()}`, role: "user", content: question },
-      { id: `assistant-${Date.now()}`, role: "assistant", content: answer.answer, answer },
-    ]);
+    setMessages((current) => [...current, { id: `assistant-${Date.now()}`, role: "assistant", content: answer.answer, answer }]);
     setSteps(answer.execution);
     setConversationState(turn.state);
     setResponseMode(answer.mode ?? "fallback");
     setInput("");
     setIsSending(false);
+    if (process.env.NODE_ENV !== "production") console.info("[Tea Assistant Performance]", { frontendTotal: `${Math.round(performance.now() - submittedAt)}ms` });
   }
 
   return (
@@ -58,7 +65,7 @@ export function TeaChat() {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><p className="section-kicker">在线 AI 导购 Demo</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">用一个真实问题，体验这条 POC 链路。</h2></div><p className="max-w-md text-sm leading-7 text-neutral-500">结构化业务规则保证价格与推荐边界；配置实时 RAG 后，模型仅基于检索资料组织自然回答并展示来源。</p></div>
       <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(330px,0.6fr)] lg:items-start">
         <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-soft">
-          <div className="flex items-center justify-between border-b border-black/5 bg-[#f7f8f9] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"><Bot size={16} /></span><div><p className="text-sm font-medium">一叶春山 · 知识库导购</p><p className="mt-0.5 text-xs text-neutral-500">当前版本 · 项目资料 POC</p></div></div><span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] text-neutral-500">{responseMode === "live-rag" ? "实时 RAG" : responseMode === "fallback" ? "本地兜底" : "结构化检索"}</span></div>
+          <div className="flex items-center justify-between border-b border-black/5 bg-[#f7f8f9] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"><Bot size={16} /></span><div><p className="text-sm font-medium">一叶春山 · 知识库导购</p><p className="mt-0.5 text-xs text-neutral-500">当前版本 · 项目资料 POC</p></div></div><span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] text-neutral-500">{responseMode === "live-rag" ? "实时 Hybrid RAG" : responseMode === "rag-unavailable" ? "RAG 不可用" : responseMode === "fallback" ? "本地兜底" : "结构化检索"}</span></div>
           <div className="min-h-[440px] space-y-6 p-5 sm:p-6">
             {messages.map((message) => message.role === "user" ? (
               <div key={message.id} className="ml-auto max-w-[88%] rounded-[20px] rounded-tr-sm bg-black px-4 py-3 text-sm leading-6 text-white">{message.content}</div>

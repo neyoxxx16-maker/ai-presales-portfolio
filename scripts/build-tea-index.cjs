@@ -9,14 +9,16 @@ Module._resolveFilename = function resolveTeaAlias(request, parent, isMain, opti
 require.extensions[".ts"] = function compileTypeScript(module, filename) { const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }); module._compile(output.outputText, filename); };
 
 const { createTeaKnowledgeChunks } = require("../lib/rag/chunks.ts");
-const { embedLocally, localEmbeddingConfig } = require("../lib/rag/local-embeddings.ts");
+const { embedTexts, embeddingProviderStatus } = require("../lib/rag/embedding-provider.ts");
 const { vectorIndexPath } = require("../lib/rag/vector-store.ts");
 
 async function main() {
   const chunks = createTeaKnowledgeChunks();
-  const embeddings = await embedLocally(chunks.map((chunk) => `${chunk.title}\n${chunk.content}`));
+  const provider = embeddingProviderStatus();
+  if (!provider.enabled) throw new Error("embedding_not_configured");
+  const embeddings = await embedTexts(chunks.map((chunk) => `${chunk.title}\n${chunk.content}`));
   fs.mkdirSync(path.dirname(vectorIndexPath), { recursive: true });
-  fs.writeFileSync(vectorIndexPath, JSON.stringify({ version: 1, model: localEmbeddingConfig.model, dimensions: embeddings[0]?.length ?? 0, chunks: chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] })) }, null, 2));
+  fs.writeFileSync(vectorIndexPath, JSON.stringify({ version: 1, model: provider.model, dimensions: provider.dimensions, chunks: chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] })) }, null, 2));
   console.log(`Tea vector index: ${chunks.length} chunks, ${embeddings[0]?.length ?? 0} dimensions`);
 }
 main().catch((error) => { console.error(error.message); process.exitCode = 1; });

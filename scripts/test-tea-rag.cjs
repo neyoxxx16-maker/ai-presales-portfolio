@@ -7,6 +7,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const originalResolveFilename = Module._resolveFilename;
 Module._resolveFilename = function resolveTeaAlias(request, parent, isMain, options) { return originalResolveFilename.call(this, request.startsWith("@/") ? path.join(projectRoot, request.slice(2)) : request, parent, isMain, options); };
 require.extensions[".ts"] = function compileTypeScript(module, filename) { const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }); module._compile(output.outputText, filename); };
+process.env.EMBEDDING_PROVIDER ??= "local";
 
 const { cosineSimilarity, loadTeaVectorIndex, searchTeaVectorIndex, vectorIndexPath } = require("../lib/rag/vector-store.ts");
 const { deepSeekProvider } = require("../lib/rag/deepseek-provider.ts");
@@ -24,6 +25,9 @@ const index = { version: 1, model: "test", dimensions: 2, chunks: [
 assert.equal(cosineSimilarity([1, 0], [1, 0]), 1, "cosine similarity must be real");
 assert.equal(searchTeaVectorIndex(index, [1, 0], { productIds: ["osmanthus-black-tea"], categories: ["brewing"] }).hits[0].id, "KB007", "brewing retrieval should prefer brewing knowledge");
 assert.equal(searchTeaVectorIndex(index, [0.95, 0.1], { productIds: ["osmanthus-black-tea"], categories: ["tea_type"] }).hits[0].id, "KB005", "fit retrieval should avoid brewing as primary source");
+const hybrid = searchTeaVectorIndex(index, [0.95, 0.1], { query: "桂花红茶适合什么人", productIds: ["osmanthus-black-tea"], categories: ["tea_type"] });
+assert.ok(hybrid.keywordHits > 0 && hybrid.vectorHits > 0 && hybrid.hybridActive, "tea retrieval must execute keyword and vector retrieval before RRF fusion");
+assert.ok(hybrid.hits.some((hit) => hit.retrievalMethod === "HYBRID" && hit.rrfScore), "tea references must be selected from real RRF results");
 assert.equal(validateGroundedOutput({ answer: "售价 ¥119", citations: ["KB005"], confidence: "high" }, { query: "桂花龙井单罐多少钱", intent: "price_query", structuredFacts: ["桂花龙井单罐｜60g｜售价 ¥109"], allowedCitationIds: ["KB005"] }), undefined, "validator must reject an incorrect structured price");
 const structuredRequest = { query: "明前龙井单罐", intent: "product_recommendation", structuredFacts: ["明前龙井单罐｜60g｜60g｜单盒 / 单罐装｜售价 ¥109｜划线价 ¥119"], allowedCitationIds: ["KB002"] };
 assert.ok(validateGroundedOutput({ answer: "明前龙井单罐为60g单盒 / 单罐装，售价 ¥109。", citations: ["KB002"], confidence: "high" }, structuredRequest), "validator must accept aligned structured facts");
@@ -72,6 +76,27 @@ async function main() {
   localEmbeddings.embedLocally = async () => { throw new Error("embedding_failure"); };
   assert.equal((await enhanceWithLiveRag(queries[0], turn)).mode, "fallback", "embedding failure must fall back");
   localEmbeddings.embedLocally = originalEmbedLocally;
+
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousEmbeddingProvider = process.env.EMBEDDING_PROVIDER;
+  const previousEmbeddingBaseUrl = process.env.EMBEDDING_BASE_URL;
+  const previousEmbeddingApiKey = process.env.EMBEDDING_API_KEY;
+  const previousEmbeddingModel = process.env.EMBEDDING_MODEL;
+  const previousEmbeddingDimensions = process.env.EMBEDDING_DIMENSIONS;
+  process.env.NODE_ENV = "production";
+  process.env.EMBEDDING_PROVIDER = "openai-compatible";
+  process.env.EMBEDDING_BASE_URL = "https://example.invalid";
+  process.env.EMBEDDING_API_KEY = "test-only";
+  process.env.EMBEDDING_MODEL = "text-embedding-v4";
+  process.env.EMBEDDING_DIMENSIONS = "512";
+  assert.equal((await enhanceWithLiveRag(queries[0], turn)).mode, "rag-unavailable", "Production configuration mismatch must not silently fall back");
+  assert.equal((await enhanceWithLiveRag(queries[0], turn)).ragStatus, "PRODUCTION_RAG_CONFIG_ERROR", "Production mismatch must expose an explicit RAG status");
+  if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  if (previousEmbeddingProvider === undefined) delete process.env.EMBEDDING_PROVIDER; else process.env.EMBEDDING_PROVIDER = previousEmbeddingProvider;
+  if (previousEmbeddingBaseUrl === undefined) delete process.env.EMBEDDING_BASE_URL; else process.env.EMBEDDING_BASE_URL = previousEmbeddingBaseUrl;
+  if (previousEmbeddingApiKey === undefined) delete process.env.EMBEDDING_API_KEY; else process.env.EMBEDDING_API_KEY = previousEmbeddingApiKey;
+  if (previousEmbeddingModel === undefined) delete process.env.EMBEDDING_MODEL; else process.env.EMBEDDING_MODEL = previousEmbeddingModel;
+  if (previousEmbeddingDimensions === undefined) delete process.env.EMBEDDING_DIMENSIONS; else process.env.EMBEDDING_DIMENSIONS = previousEmbeddingDimensions;
   const backupPath = `${vectorIndexPath}.test-backup`;
   fs.renameSync(vectorIndexPath, backupPath);
   try {

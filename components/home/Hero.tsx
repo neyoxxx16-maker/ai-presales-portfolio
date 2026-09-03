@@ -21,7 +21,7 @@ export function Hero() {
 
           <div className="mx-auto mt-24 max-w-4xl text-center lg:mt-28">
             <p className="mb-5 text-sm font-medium text-white/80">AI售前 / 解决方案工程师</p>
-            <h1 data-hero-reveal className="text-balance text-5xl font-medium leading-[1.13] tracking-[-0.018em] sm:text-6xl lg:text-7xl">
+            <h1 data-hero-reveal className="text-balance text-5xl font-medium leading-[1.06] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
               把 AI 能力变成真正
               <br />
               可落地的解决方案

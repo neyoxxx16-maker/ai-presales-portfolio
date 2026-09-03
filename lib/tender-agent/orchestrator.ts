@@ -930,8 +930,11 @@ async function deepSeekChoice(
     return { error: `DeepSeek tool choice 请求失败：${detail}` };
   }
 }
-type GroundedResponse = { answer: string; suggestions: Record<string, string> };
-type GroundedResponseAttempt = { output?: GroundedResponse; error?: string; raw?: string };
+type GroundedResponse = { answer: string; recommendation: string; citations: Array<{ sourceId: string; requirementId?: string }>; risks: string[]; suggestions: Record<string, string> };
+type GroundedResponseAttempt = { output?: GroundedResponse; error?: string; raw?: string; missingFields: string[] };
+function structuredOutputDiagnostic(values: { responseFormatUsed: boolean; rawResponseLength: number; parseSuccess: boolean; retryCount: number; schemaValidationSuccess: boolean; missingFields: string[] }) { console.info("[tender-structured-output]", values); }
+function stringList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()).slice(0, 20) : []; }
+function citations(value: unknown) { return Array.isArray(value) ? value.flatMap((item) => { if (typeof item === "string" && item.trim()) return [{ sourceId: item.trim() }]; if (!item || typeof item !== "object") return []; const record = item as { sourceId?: unknown; id?: unknown; requirementId?: unknown }; const sourceId = typeof record.sourceId === "string" ? record.sourceId : typeof record.id === "string" ? record.id : ""; return sourceId ? [{ sourceId, ...(typeof record.requirementId === "string" ? { requirementId: record.requirementId } : {}) }] : []; }).slice(0, 30) : []; }
 export function parseGroundedResponse(raw: string): GroundedResponseAttempt {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
   const candidates = [cleaned]; let start = cleaned.indexOf("{"); let depth = 0; let quoted = false; let escaped = false;
@@ -944,18 +947,25 @@ export function parseGroundedResponse(raw: string): GroundedResponseAttempt {
   }
   for (const candidate of candidates) {
     try {
-      const value = JSON.parse(candidate) as { answer?: unknown; suggestions?: unknown };
-      if (typeof value.answer !== "string" || !value.answer.trim()) continue;
+      const value = JSON.parse(candidate) as { answer?: unknown; conclusion?: unknown; summary?: unknown; finalAnswer?: unknown; recommendation?: unknown; suggestions?: unknown; citations?: unknown; evidence?: unknown; risks?: unknown };
+      const answer = [value.answer, value.conclusion, value.summary, value.finalAnswer, value.recommendation].find((item): item is string => typeof item === "string" && Boolean(item.trim()));
+      const missingFields = [
+        ...(answer ? [] : ["answer"]),
+        ...(typeof value.recommendation === "string" ? [] : ["recommendation"]),
+        ...(Array.isArray(value.citations) || Array.isArray(value.evidence) ? [] : ["citations"]),
+        ...(Array.isArray(value.risks) ? [] : ["risks"]),
+      ];
+      if (!answer) continue;
       const suggestions = typeof value.suggestions === "object" && value.suggestions && !Array.isArray(value.suggestions)
         ? Object.fromEntries(Object.entries(value.suggestions).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())))
         : {};
-      return { output: { answer: value.answer.trim().slice(0, 5000), suggestions } };
+      return { output: { answer: answer.trim().slice(0, 5000), recommendation: typeof value.recommendation === "string" ? value.recommendation.trim().slice(0, 2000) : "", citations: citations(value.citations ?? value.evidence), risks: stringList(value.risks), suggestions }, missingFields };
     } catch { /* Try the JSON object extracted from surrounding prose. */ }
   }
-  return { error: "DeepSeek 返回内容不是符合 schema 的 JSON 对象，或缺少核心 answer 字段。", raw: cleaned.slice(0, 6000) };
+  return { error: "DeepSeek 返回内容不是符合 schema 的 JSON 对象，或缺少核心 answer 字段。", raw: cleaned.slice(0, 6000), missingFields: ["answer"] };
 }
 async function composeGroundedResponse(state: State): Promise<GroundedResponseAttempt> {
-  if (!process.env.DEEPSEEK_API_KEY || !state.document) return { error: "DeepSeek 未配置或招标文本未就绪。" };
+  if (!process.env.DEEPSEEK_API_KEY || !state.document) return { error: "DeepSeek 未配置或招标文本未就绪。", missingFields: ["answer"] };
   const matches = allMatches(state);
   const evidence = matches
     .flatMap((match) =>
@@ -973,7 +983,7 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
     {
       role: "system",
       content:
-        '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。任何关键证据不足时，明确写“待确认”，并在 answer 中提出需要用户补充的材料。仅返回合法 JSON，不要 Markdown，不要解释。Schema：{"answer":string,"suggestions":{"REQ-ID":string}}。suggestions 为可选对象；每一条 suggestion 必须保留“来源：”并引用给定 sourceId；无证据则写“待确认：当前资料未检索到…”。',
+        '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。任何关键证据不足时，明确写“待确认”，并在 answer 中提出需要用户补充的材料。只输出一个合法 JSON 对象：禁止 Markdown、```json code fence、JSON 前后说明。Schema：{"answer":string,"recommendation":string,"citations":[{"sourceId":string,"requirementId":string}],"risks":[string],"suggestions":{"REQ-ID":string}}。answer 必填且不超过 1500 个汉字；recommendation/citations/risks 无内容时分别使用空字符串、[]、[]；risks 最多 8 条。citations 只能使用给定 sourceId。suggestions 可为空对象；每一条 suggestion 必须保留“来源：”并引用给定 sourceId；无证据则写“待确认：当前资料未检索到…”。',
     },
     {
       role: "user",
@@ -986,7 +996,7 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
       }),
     },
   ];
-  const request = async (messages: Array<{ role: string; content: string }>) => {
+  const request = async (messages: Array<{ role: string; content: string }>, retryCount: number) => {
     const response = await fetch(
       endpoint,
       {
@@ -999,30 +1009,35 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
           model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
           response_format: { type: "json_object" },
           messages,
-          max_tokens: 1400,
+          max_tokens: 1800,
           stream: false,
           thinking: { type: "disabled" },
         }),
         signal: AbortSignal.timeout(20000),
       },
     );
-    if (!response.ok) return { error: `DeepSeek 综合结论 HTTP ${response.status}` };
+    if (!response.ok) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"] }); return { error: `DeepSeek 综合结论 HTTP ${response.status}`, missingFields: ["answer"] }; }
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const raw = data.choices?.[0]?.message?.content;
-    return raw ? parseGroundedResponse(raw) : { error: "DeepSeek 综合结论响应为空。" };
+    if (!raw) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"] }); return { error: "DeepSeek 综合结论响应为空。", missingFields: ["answer"] }; }
+    const parsed = parseGroundedResponse(raw);
+    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: raw.length, parseSuccess: Boolean(parsed.output), retryCount, schemaValidationSuccess: Boolean(parsed.output?.answer), missingFields: parsed.missingFields });
+    return parsed;
   };
   try {
-    const first = await request(baseMessages);
+    const first = await request(baseMessages, 0);
     if (first.output) return first;
     const repaired = await request([
-      { role: "system", content: '仅返回符合指定 schema 的 JSON，不要 Markdown，不要解释。Schema：{"answer":string,"suggestions":{"REQ-ID":string}}。answer 为必填；suggestions 可省略。' },
-      { role: "user", content: `请修复以下输出：\n${first.raw ?? first.error ?? "无有效 JSON"}` },
-    ]);
-    return repaired.output ? repaired : { error: repaired.error ?? first.error ?? "DeepSeek structured output 修复失败。" };
+      ...baseMessages,
+      { role: "assistant", content: first.raw ?? "" },
+      { role: "user", content: '将上一条模型输出转换为唯一合法 JSON 对象。只可使用已提供的招标要求、规则分析和证据；不得补充新事实。禁止 Markdown、code fence 和解释。answer 必填。Schema：{"answer":string,"recommendation":string,"citations":[{"sourceId":string,"requirementId":string}],"risks":[string],"suggestions":{"REQ-ID":string}}。' },
+    ], 1);
+    return repaired.output ? repaired : { error: repaired.error ?? first.error ?? "DeepSeek structured output 修复失败。", missingFields: repaired.missingFields.length ? repaired.missingFields : first.missingFields };
   } catch (error) {
-    return { error: `DeepSeek 综合结论请求失败：${error instanceof Error ? error.message : "unknown_error"}` };
+    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount: 0, schemaValidationSuccess: false, missingFields: ["answer"] });
+    return { error: `DeepSeek 综合结论请求失败：${error instanceof Error ? error.message : "unknown_error"}`, missingFields: ["answer"] };
   }
 }
 function directAnswer(state: State) {
@@ -1125,7 +1140,7 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
         characterCount: ocr.text.length,
         sectionCount: 0,
         chunkingMethod: "fallback",
-        pageCount: ocr.pageResults.length || state.parsed.pageCount,
+        pageCount: state.parsed.pageCount ?? ocr.pageResults.length,
         pages: ocr.pageResults.map((page) => ({ pageNumber: page.page, text: page.text })),
         parseMethod: "ocr",
         status: "PARSED",
@@ -1556,10 +1571,10 @@ export async function runTenderAgent(
               ? ("configured" as const)
               : ("not_configured" as const),
             ocr:
-              process.env.TENDER_OCR_PROVIDER ===
-                "azure-document-intelligence" ||
-              process.env.TENDER_OCR_PROVIDER === "paddleocr" ||
-              !process.env.TENDER_OCR_PROVIDER
+              (["azure", "azure-read", "azure-document-intelligence"].includes(
+                process.env.TENDER_OCR_PROVIDER?.trim().toLowerCase() || "azure-document-intelligence",
+              )) &&
+              Boolean(process.env.TENDER_OCR_ENDPOINT && process.env.TENDER_OCR_API_KEY)
                 ? ("configured" as const)
                 : ("not_configured" as const),
             tavily:

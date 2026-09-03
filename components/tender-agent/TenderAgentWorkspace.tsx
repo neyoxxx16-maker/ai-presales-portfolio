@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { TenderFileDropzone } from "@/components/tender-agent/TenderFileDropzone";
 import { TenderCompanyLibraryManager } from "@/components/tender-agent/TenderCompanyLibraryManager";
-import { companyLibraryOverview } from "@/data/tender/knowledge";
+import { companyLibraryOverview, tenderKnowledge } from "@/data/tender/knowledge";
 import {
   deleteTenderProjectSession,
   getActiveTenderProjectId,
@@ -36,6 +36,7 @@ import {
 import type {
   CompanyWorkspaceMode,
   CompanyDocument,
+  KnowledgeRecord,
   MatchStatus,
   ParsedBidDocument,
   RequirementMatch,
@@ -213,6 +214,7 @@ export function TenderAgentWorkspace() {
   const [traceOpen, setTraceOpen] = useState(false);
   const [rubricOpen, setRubricOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [demoLibraryOpen, setDemoLibraryOpen] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [analysisStale, setAnalysisStale] = useState(false);
   const [askingAgent, setAskingAgent] = useState(false);
@@ -303,6 +305,10 @@ export function TenderAgentWorkspace() {
     setCompanyMode("workspace");
     if (result && result.companyMode !== "workspace") setSourceMismatch(true);
     setWorkspaceOpen(true);
+  }
+  function manageCurrentCompanySource() {
+    if (companyMode === "demo") setDemoLibraryOpen(true);
+    else setWorkspaceOpen(true);
   }
   function selectCompanyMode(mode: CompanyWorkspaceMode) {
     if (mode === "workspace") {
@@ -556,26 +562,30 @@ export function TenderAgentWorkspace() {
           <p className="mt-5 max-w-3xl text-sm leading-7 text-neutral-500">
             从招标文件出发，完成需求分类、企业证据核验、风险识别与技术应答草稿生成。
           </p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-medium text-neutral-700">当前资料来源</p>
+            <div className="inline-flex rounded-full border border-black/10 bg-white p-1">
             <button
               onClick={() => selectCompanyMode("demo")}
-              className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "demo" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${companyMode === "demo" ? "bg-black text-white" : "text-neutral-600"}`}
             >
-              演示企业资料
+              演示资料（内置样例）
             </button>
             <button
               onClick={openRealWorkspace}
-              className={`rounded-full px-3 py-1.5 text-xs ${companyMode === "workspace" ? "bg-black text-white" : "border border-black/10 text-neutral-600"}`}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${companyMode === "workspace" ? "bg-black text-white" : "text-neutral-600"}`}
             >
               真实企业资料
             </button>
+            </div>
           </div>
           <p className="mt-2 text-xs text-neutral-400">
             {companyMode === "demo"
-              ? "当前使用示例供应商资料，仅用于作品集演示。"
-              : "当前仅使用本地真实企业资料，不会混入演示资料。"}
+              ? "系统内置一套示例企业资料，用于体验完整招投标 Agent 流程。"
+              : workspaceDocuments.length ? `真实企业资料 · ${workspaceDocuments.length} 个文件 · 已索引 ${workspaceDocuments.filter((item) => item.parseStatus === "PARSED" && item.indexed).length} 个` : "当前已切换至真实企业资料，但尚未导入文件；上传并完成索引后可用于企业能力判断。"}
           </p>
-          <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={openRealWorkspace} />
+          {companyMode === "demo" && <p className="mt-2 text-xs text-neutral-500">资料概览：企业基本信息 · 企业资质 · 技术能力 · 历史案例 · 项目交付能力</p>}
+          <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onManage={manageCurrentCompanySource} />
         </div>
         <div className="mt-10 grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside ref={leftPanelRef} className="h-fit rounded-[28px] border border-black/5 bg-white p-5 shadow-soft xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto sm:p-6">
@@ -728,6 +738,7 @@ export function TenderAgentWorkspace() {
                 companyMode={companyMode}
                 workspaceDocuments={workspaceDocuments}
                 onOpenRealWorkspace={openRealWorkspace}
+                onManageCompanySource={manageCurrentCompanySource}
                 reviewedIds={reviewedIds}
                 onToggleReview={toggleReview}
                 onExport={exportResult}
@@ -831,6 +842,14 @@ export function TenderAgentWorkspace() {
           </div>
         </div>
       )}
+      {demoLibraryOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/20 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="演示企业资料详情">
+          <div className="ml-auto flex h-full w-full max-w-4xl flex-col rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-center justify-between border-b border-black/5 pb-4"><div><p className="text-lg font-medium">演示企业资料</p><p className="mt-1 text-xs text-neutral-500">内置样例 · Demo Dataset · 仅供体验 Agent 分析流程。</p></div><button type="button" onClick={() => setDemoLibraryOpen(false)} className="rounded-full border border-black/10 p-2 text-neutral-600" aria-label="关闭演示企业资料"><X size={16} /></button></div>
+            <DemoLibraryDetails />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -842,6 +861,7 @@ function ResultView({
   companyMode,
   workspaceDocuments,
   onOpenRealWorkspace,
+  onManageCompanySource,
   reviewedIds,
   onToggleReview,
   onExport,
@@ -852,6 +872,7 @@ function ResultView({
   companyMode: CompanyWorkspaceMode;
   workspaceDocuments: CompanyDocument[];
   onOpenRealWorkspace: () => void;
+  onManageCompanySource: () => void;
   reviewedIds: string[];
   onToggleReview: (id: string) => void;
   onExport: () => void;
@@ -1013,7 +1034,7 @@ function ResultView({
       {tab === "scoring" && <ScoringView result={result} />}
       {tab === "strategy" && <PresalesStrategyView result={result} />}
       {tab === "response" && <ResponseView result={result} />}
-      {tab === "library" && <LibraryView companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={onOpenRealWorkspace} />}
+      {tab === "library" && <LibraryView companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={onOpenRealWorkspace} onManage={onManageCompanySource} />}
       <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
         <p>{result.notice}</p>
         <button
@@ -1555,7 +1576,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
       )}
       {section === "sprint" && (
         <div className="mt-5 space-y-3">
-          <p className="text-xs leading-6 text-neutral-500">{strategy.scoreSprint.summary} 可确认分：{strategy.scoreSprint.confirmedScore ?? 0} · 可争取分：{strategy.scoreSprint.potentialScore ?? 0} · 可用总分：{strategy.scoreSprint.totalAvailableScore}</p>
+          <p className="text-xs leading-6 text-neutral-500">{strategy.scoreSprint.summary} {strategy.scoreSprint.actions.length ? <>可确认分：{strategy.scoreSprint.confirmedScore ?? 0} · 可争取分：{strategy.scoreSprint.potentialScore ?? 0} · 可计算总分：{strategy.scoreSprint.totalAvailableScore}</> : <>可确认分：— · 可争取分：— · 可计算总分：— · 暂不可计算</>}</p>
           {strategy.scoreSprint.actions.map((item, index) => (
             <article key={`${item.scoreItem}-${index}`} className="rounded-2xl bg-[#f7f8f9] p-4">
               <div className="flex items-start justify-between gap-3"><p className="text-sm font-medium">{item.scoreItem}</p><span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-neutral-700">{priorityLabel[item.priority]} · {item.availableScore}</span></div>
@@ -1563,7 +1584,7 @@ function PresalesStrategyView({ result }: { result: TenderAgentResult }) {
               <Evidence sources={item.evidence} />
             </article>
           ))}
-          {!strategy.scoreSprint.actions.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">当前文件未解析到结构化评分标准，因此不能可靠预测得分。</p><p className="mt-1">已识别竞争维度：企业资质、类似业绩、技术响应与服务保障。</p><p className="mt-1">需要补充：评分表、分值权重及加分/扣分规则；未生成虚构分数。</p></article>}
+          {!strategy.scoreSprint.actions.length && <article className="rounded-2xl bg-[#f7f8f9] p-4 text-xs leading-6 text-neutral-600"><p className="font-medium text-neutral-800">暂不可计算</p><p className="mt-1">未解析到可用评分项，暂不生成分值预测。</p><p className="mt-1">缺少：评分表 / 分值权重 / 加扣分规则。</p></article>}
         </div>
       )}
       {section === "control" && (
@@ -1672,29 +1693,35 @@ function ResponseView({ result }: { result: TenderAgentResult }) {
 function CompanySourceSummary({
   companyMode,
   workspaceDocuments,
-  onOpenRealWorkspace,
+  onManage,
 }: {
   companyMode: CompanyWorkspaceMode;
   workspaceDocuments: CompanyDocument[];
-  onOpenRealWorkspace: () => void;
+  onManage: () => void;
 }) {
   const realDocuments = workspaceDocuments.filter((item) => item.parseStatus === "PARSED" && item.indexed);
   const demoEvidenceCount = companyLibraryOverview.sections.reduce((total, [, count]) => total + count, 0);
   return (
     <section className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-2xl border border-black/5 bg-white px-4 py-3 text-xs text-neutral-600">
-      <span className="font-medium text-neutral-800">我方资料：</span><button type="button" onClick={onOpenRealWorkspace} className="font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-4 hover:text-emerald-800">{companyMode === "demo" ? "演示企业资料" : "真实企业资料"}</button><span>·</span><span>{companyMode === "demo" ? `${companyLibraryOverview.sections.length} 类能力 · ${demoEvidenceCount} 条 Evidence` : `${workspaceDocuments.length} 个文件 · 已索引 ${realDocuments.length} 个`}</span><button type="button" onClick={onOpenRealWorkspace} className="ml-auto rounded-full border border-black/10 px-3 py-1.5 font-medium text-neutral-700 hover:border-emerald-800 hover:text-emerald-800">管理企业资料</button>
+      <span className="font-medium text-neutral-800">我方资料：</span>{companyMode === "demo" ? <><span className="font-medium text-neutral-800">演示企业资料（内置样例）</span><span>·</span><span>{companyLibraryOverview.sections.length} 类能力 · {demoEvidenceCount} 条 Evidence</span></> : <><span className="font-medium text-neutral-800">真实企业资料</span><span>·</span><span>{workspaceDocuments.length} 个文件 · 已索引 {realDocuments.length} 个</span></>}<button type="button" onClick={onManage} className="ml-auto rounded-full border border-black/10 px-3 py-1.5 font-medium text-neutral-700 hover:border-emerald-800 hover:text-emerald-800">{companyMode === "demo" ? "查看演示企业资料" : "管理企业资料"}</button>
     </section>
   );
 }
-function LibraryView({ companyMode, workspaceDocuments, onOpenRealWorkspace }: {
+
+const demoCategoryByLabel: Record<string, KnowledgeRecord["category"]> = { "公司资料": "company", "企业资质": "qualification", "项目成员": "personnel", "历史案例": "case", "产品能力": "product", "实施交付": "delivery", "售后服务": "after-sales" };
+function DemoLibraryDetails() {
+  return <div className="mt-5 flex-1 space-y-4 overflow-y-auto"><section className="rounded-2xl bg-[#f7f8f9] p-4"><p className="text-sm font-medium">资料概览</p><p className="mt-1 text-xs leading-6 text-neutral-600">演示企业：{companyLibraryOverview.company} · {companyLibraryOverview.sections.length} 类能力 · {tenderKnowledge.length} 条 Evidence</p><div className="mt-3 flex flex-wrap gap-2">{companyLibraryOverview.sections.map(([label, count]) => <span key={label} className="rounded-full bg-white px-3 py-1.5 text-xs text-neutral-700">{label} · {count}</span>)}</div></section><section><p className="text-sm font-medium">能力分类与 Evidence</p><div className="mt-3 space-y-2">{companyLibraryOverview.sections.map(([label]) => <details key={label} className="rounded-2xl border border-black/5 bg-[#f7f8f9] p-4"><summary className="cursor-pointer text-sm font-medium">{label} · {tenderKnowledge.filter((item) => item.category === demoCategoryByLabel[label]).length} 条 Evidence</summary><div className="mt-3 space-y-2">{tenderKnowledge.filter((item) => item.category === demoCategoryByLabel[label]).map((item) => <article key={item.id} className="rounded-xl bg-white px-3 py-3"><p className="text-xs font-medium text-neutral-800">{item.title}</p><p className="mt-1 text-xs leading-5 text-neutral-600">{item.content}</p><p className="mt-1 text-[11px] text-neutral-400">来源：{item.sourceFile}</p></article>)}</div></details>)}</div></section></div>;
+}
+function LibraryView({ companyMode, workspaceDocuments, onOpenRealWorkspace, onManage }: {
   companyMode: CompanyWorkspaceMode;
   workspaceDocuments: CompanyDocument[];
   onOpenRealWorkspace: () => void;
+  onManage: () => void;
 }) {
   return (
     <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-soft sm:p-6">
       <p className="text-sm font-medium">我方资料库</p>
-      <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onOpenRealWorkspace={onOpenRealWorkspace} />
+      <CompanySourceSummary companyMode={companyMode} workspaceDocuments={workspaceDocuments} onManage={onManage} />
       {companyMode === "demo" && <p className="mt-5 text-xs text-neutral-400">{companyLibraryOverview.notice}</p>}
       {companyMode === "workspace" && <button type="button" onClick={onOpenRealWorkspace} className="mt-5 text-xs font-medium text-neutral-800 underline">管理真实企业资料</button>}
     </section>

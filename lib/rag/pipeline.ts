@@ -2,7 +2,7 @@ import { teaKnowledge } from "@/data/tea/knowledge";
 import { teaPriceEvidence, teaSkus } from "@/data/tea/products";
 import { classifyTeaIntent } from "@/lib/tea-intent";
 import { deepSeekProvider, isDeepSeekConfigured } from "@/lib/rag/deepseek-provider";
-import { embedLocally } from "@/lib/rag/local-embeddings";
+import { embedTexts, embeddingProviderStatus } from "@/lib/rag/embedding-provider";
 import { loadTeaVectorIndex, RAG_CONFIG, searchTeaVectorIndex } from "@/lib/rag/vector-store";
 import type { GroundedOutput, RagRequest } from "@/lib/rag/types";
 import type { TeaAnswer, TeaResponseMode, TeaTurnResult } from "@/types/tea";
@@ -20,7 +20,7 @@ function structuredFacts(answer: TeaAnswer) {
 }
 
 function promptFor(request: RagRequest, knowledge: string) {
-  return `你是一叶春山 AI 导购 POC。只能依据 STRUCTURED FACTS 与 RETRIEVED KNOWLEDGE 回答，不得使用外部常识补充品牌、SKU、价格、库存、产区、优惠、物流、医疗功效或销售数据。结构化事实优先，绝不能改写其中的价格、规格、包装或商品。资料不足时明确说明无法确认。仅输出合法 JSON：{"answer":"...","citations":["KB..."],"confidence":"high|medium|low","followUp":"可选"}。\n\nSTRUCTURED FACTS:\n${request.structuredFacts.join("\n") || "无"}\n\nRETRIEVED KNOWLEDGE:\n${knowledge}\n\nUSER QUERY:\n${request.query}`;
+  return `你是一叶春山 AI 导购 POC。只能依据 STRUCTURED FACTS 与 RETRIEVED KNOWLEDGE 回答，不得使用外部常识补充品牌、SKU、价格、库存、产区、优惠、物流、医疗功效或销售数据。结构化事实优先，绝不能改写其中的价格、规格、包装或商品。若 STRUCTURED FACTS 包含商品或 SKU，回答只能解释这些已给出的候选，禁止新增、替换或比较任何其他商品；不要把检索资料中的其他商品变成推荐。回答保持简洁。资料不足时明确说明无法确认。仅输出合法 JSON：{"answer":"...","citations":["KB..."],"confidence":"high|medium|low","followUp":"可选"}。\n\nSTRUCTURED FACTS:\n${request.structuredFacts.join("\n") || "无"}\n\nRETRIEVED KNOWLEDGE:\n${knowledge}\n\nUSER QUERY:\n${request.query}`;
 }
 
 function validateGroundedOutput(output: GroundedOutput, request: RagRequest) {
@@ -46,26 +46,62 @@ function validateGroundedOutput(output: GroundedOutput, request: RagRequest) {
   return { ...output, citations };
 }
 
-function withMode(answer: TeaAnswer, mode: TeaResponseMode) { return { ...answer, mode, execution: answer.execution.map((step) => step.label === "生成回答" ? { ...step, detail: mode === "live-rag" ? "已完成（实时 RAG）" : step.detail } : step) }; }
+function withMode(answer: TeaAnswer, mode: TeaResponseMode) { return { ...answer, mode, execution: answer.execution.map((step) => step.label === "生成回答" ? { ...step, detail: mode === "live-rag" ? "已完成（实时 Hybrid RAG）" : step.detail } : step) }; }
+
+function isStrictProductionRag() {
+  return process.env.NODE_ENV === "production" && process.env.EMBEDDING_PROVIDER === "openai-compatible";
+}
+
+function ragUnavailable(answer: TeaAnswer, status: "RAG_UNAVAILABLE" | "PRODUCTION_RAG_CONFIG_ERROR", detail: string) {
+  return {
+    ...withMode(answer, "rag-unavailable"),
+    ragStatus: status,
+    ragError: detail,
+    execution: [...answer.execution, { label: "实时 RAG 状态", detail: `${status} · ${detail}`, status: "empty" as const }],
+  };
+}
+
+function addHybridTrace(answer: TeaAnswer, retrieval: { keywordHits: number; vectorHits: number; hybridActive: boolean }) {
+  return {
+    ...answer,
+    ragStatus: retrieval.hybridActive ? "HYBRID_RAG_ACTIVE" as const : undefined,
+    execution: [
+      ...answer.execution,
+      { label: "关键词检索", detail: `已完成 · ${retrieval.keywordHits} 条关键词命中`, status: "completed" as const },
+      { label: "向量检索", detail: `已完成 · ${retrieval.vectorHits} 条向量排序结果`, status: "completed" as const },
+      { label: "Hybrid / RRF 融合", detail: retrieval.hybridActive ? "HYBRID_RAG_ACTIVE · 已融合关键词与向量排序" : "已完成 · 本轮关键词未命中，保留向量排序结果", status: "completed" as const },
+    ],
+  };
+}
 
 export async function enhanceWithLiveRag(query: string, turn: TeaTurnResult) {
   const intent = classifyTeaIntent(query).intent;
-  const hasStructuredFactAnswer = turn.answer.execution.some((step) => step.detail?.includes("结构化 SKU") || step.detail?.includes("汇总已确认礼盒净含量") || step.detail?.includes("匹配商品："));
-  if (!isDeepSeekConfigured() || !ragIntents.has(intent) || turn.state.pendingDialog || hasStructuredFactAnswer) return withMode(turn.answer, "structured");
+  if (!isDeepSeekConfigured() || !ragIntents.has(intent) || turn.state.pendingDialog) return withMode(turn.answer, "structured");
   try {
+    const strict = isStrictProductionRag();
     const index = await loadTeaVectorIndex();
-    if (!index) return withMode(turn.answer, "fallback");
-    const queryEmbedding = (await embedLocally([query]))[0];
+    if (!index) return strict ? ragUnavailable(turn.answer, "PRODUCTION_RAG_CONFIG_ERROR", "Production 512d Index 缺失。") : withMode(turn.answer, "fallback");
+    const provider = embeddingProviderStatus();
+    const invalidProductionConfig = !provider.enabled || provider.provider !== "openai-compatible" || provider.model !== "text-embedding-v4" || provider.dimensions !== 512 || index.model !== "text-embedding-v4" || index.dimensions !== 512 || index.chunks.some((chunk) => chunk.embedding.length !== 512);
+    if (strict && invalidProductionConfig) return ragUnavailable(turn.answer, "PRODUCTION_RAG_CONFIG_ERROR", "Production RAG 必须使用 text-embedding-v4 与完整 512d Index。");
+    if (!provider.enabled || index.model !== provider.model || index.dimensions !== provider.dimensions) return withMode(turn.answer, "fallback");
+    const queryEmbedding = (await embedTexts([query]))[0];
+    if (queryEmbedding.length !== index.dimensions) return strict ? ragUnavailable(turn.answer, "PRODUCTION_RAG_CONFIG_ERROR", "Query Embedding 维度与 Production Index 不一致。") : withMode(turn.answer, "fallback");
     const productIds = turn.answer.recommendations.flatMap((product) => [product.id]);
-    const retrieval = searchTeaVectorIndex(index, queryEmbedding, { productIds, categories: categoryByIntent[intent] });
-    if (retrieval.insufficientContext) return withMode(turn.answer, "fallback");
+    const retrieval = searchTeaVectorIndex(index, queryEmbedding, { query, productIds, categories: categoryByIntent[intent] });
+    if (retrieval.insufficientContext) return strict ? ragUnavailable(turn.answer, "RAG_UNAVAILABLE", "关键词与向量检索未获得足够的可引用资料。") : withMode(turn.answer, "fallback");
     const request: RagRequest = { query, intent, productIds, structuredFacts: structuredFacts(turn.answer), allowedCitationIds: retrieval.hits.map((hit) => hit.id) };
     const groundedPrompt = promptFor(request, retrieval.hits.map((hit) => `[${hit.id}] ${hit.title}\n${hit.content}`).join("\n\n"));
-    const output = validateGroundedOutput(await deepSeekProvider.generate(groundedPrompt, query), request);
-    if (!output) return withMode(turn.answer, "fallback");
+    let output = validateGroundedOutput(await deepSeekProvider.generate(groundedPrompt, query), request);
+    if (!output && request.structuredFacts.length) {
+      const repairPrompt = `${groundedPrompt}\n\n上一次 JSON 未通过事实校验。现在必须重新输出 JSON：删除一切未出现在 STRUCTURED FACTS 中的商品、SKU、价格、规格和包装；不得新增候选商品；citations 仅能使用 RETRIEVED KNOWLEDGE 中的 ID。`;
+      output = validateGroundedOutput(await deepSeekProvider.generate(repairPrompt, query), request);
+    }
+    if (!output) return strict ? ragUnavailable(turn.answer, "RAG_UNAVAILABLE", "DeepSeek 输出未通过引用与结构化事实校验。") : withMode(turn.answer, "fallback");
     const sources = output.citations.map((id) => teaKnowledge.find((document) => document.id === id)).filter((document): document is NonNullable<typeof document> => Boolean(document)).map((document) => ({ ...document, score: 100, matchReasons: ["实时 RAG 引用"] }));
-    return { ...withMode(turn.answer, "live-rag"), answer: output.followUp ? `${output.answer}\n${output.followUp}` : output.answer, sources };
-  } catch {
+    return { ...withMode(addHybridTrace(turn.answer, retrieval), "live-rag"), answer: output.followUp ? `${output.answer}\n${output.followUp}` : output.answer, sources, ragStatus: retrieval.hybridActive ? "HYBRID_RAG_ACTIVE" : undefined };
+  } catch (error) {
+    if (isStrictProductionRag()) return ragUnavailable(turn.answer, "RAG_UNAVAILABLE", error instanceof Error ? error.message : "Remote Embedding 或 RAG Provider 不可用。");
     return withMode(turn.answer, "fallback");
   }
 }

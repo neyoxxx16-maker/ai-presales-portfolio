@@ -17,7 +17,7 @@ export function ResumeHero() {
           <div className="mt-20 grid gap-10 lg:mt-24 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
             <div>
               <p className="text-sm font-medium text-white/80">黄念红 · AI 售前 / 解决方案工程师</p>
-              <h1 data-hero-reveal className="mt-4 max-w-4xl text-5xl font-medium leading-[1.13] tracking-[-0.018em] sm:text-6xl lg:text-7xl">
+              <h1 data-hero-reveal className="mt-4 max-w-4xl text-5xl font-medium leading-[1.06] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
                 把业务问题整理成
                 <br />
                 可验证的 AI 方案
@@ -62,7 +62,7 @@ export function ResumeHero() {
 
           <div className="mt-auto flex flex-wrap gap-2 pt-12">
             {focusTags.map((tag) => (
-              <span key={tag} className="rounded-full bg-[rgba(50,60,75,0.6)] px-3 py-1.5 text-xs text-white/95">
+              <span key={tag} className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs text-white/95 backdrop-blur">
                 {tag}
               </span>
             ))}

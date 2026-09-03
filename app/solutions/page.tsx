@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, CheckCircle2, CircleAlert, FileSearch, FileText, FlaskConical, Layers3, MessageSquareText, SearchCheck, Workflow } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CheckCircle2, CircleAlert, FileSearch, FileText, FlaskConical, MessageSquareText, SearchCheck } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
 import { SolutionAnchorNav } from "@/components/solutions/SolutionAnchorNav";
+import { SolutionArchitectureDiagrams } from "@/components/solutions/SolutionArchitectureDiagrams";
 import { SolutionDeliveryCenter } from "@/components/solutions/SolutionDeliveryCenter";
 import { siteConfig } from "@/lib/site-config";
 
@@ -24,11 +25,6 @@ const comparisons = [
   { title: "RAG vs 微调", conclusion: "产品知识与招标信息会更新，当前项目优先以 RAG 获取可更新、可追溯的知识，而不通过微调固化事实。", columns: ["RAG", "微调"], rows: [["知识更新", "更新资料后可重建索引", "需重新训练"], ["数据量要求", "适合当前资料规模", "通常需要更稳定的训练数据"], ["成本", "以检索与调用成本为主", "需要训练与迭代成本"], ["适用", "动态私有知识", "固定行为或风格模式"]] },
   { title: "关键词 vs 向量 vs Hybrid RAG", conclusion: "招投标文件既有硬性专业关键词，也有自然语言条款；当前项目用 Hybrid RAG 兼顾精确命中与语义召回。", columns: ["关键词", "向量", "Hybrid RAG"], rows: [["精确关键词", "强", "一般", "强"], ["语义召回", "有限", "强", "强"], ["中文长文档", "依赖词面", "依赖语义相近", "同时覆盖"], ["稳定性", "规则清晰", "需关注相似但无关", "以融合结果降低单一路径偏差"]] },
   { title: "纯生成 vs RAG + Evidence", conclusion: "售前与招投标场景不能只给答案，还需要说明答案依据；因此关键结论尽可能绑定检索来源与执行轨迹。", columns: ["纯大模型生成", "RAG + Evidence"], rows: [["回答依据", "难以向用户解释", "可回看来源"], ["可追溯性", "有限", "保留 Evidence / Trace"], ["幻觉风险", "需要额外控制", "以检索资料约束回答"], ["客户沟通", "更像结论", "可展示判断过程"]] },
-] as const;
-
-const architectures = [
-  { title: "AI 导购数据流", icon: Layers3, nodes: ["用户提问", "意图识别", "Knowledge Search", "Hybrid Retrieval", "生成回答", "Evidence", "Response"], highlights: ["Evidence"] },
-  { title: "招投标 Agent 数据流", icon: Workflow, nodes: ["文件上传", "文件解析 / OCR", "文本切分", "Hybrid RAG", "企业资料", "Web Search", "Agent Analysis", "Evidence", "最终报告"], highlights: ["Evidence", "Agent Analysis"] },
 ] as const;
 
 const decisions = [
@@ -92,7 +88,7 @@ export default function SolutionsPage() {
     <section id="solution-architecture" className="scroll-mt-[172px] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">
       <SectionHeading index="04" title="技术选型与方案架构" description="选什么，更要说清为什么这样选；数据流和证据链共同保证方案可以解释、复核和迭代。" />
       <div className="mt-12 grid gap-5">{comparisons.map((comparison) => <ComparisonTable key={comparison.title} {...comparison} />)}</div>
-      <div className="mt-20 grid gap-5 lg:grid-cols-2">{architectures.map(({ title, icon: Icon, nodes, highlights }) => <article key={title} className="rounded-[28px] border border-black/5 bg-[#f7f8f9] p-7"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-white"><Icon size={18} /></span><h3 className="mt-8 text-2xl font-medium tracking-[-0.035em]">{title}</h3><InlineFlow nodes={nodes} highlights={highlights} /></article>)}</div>
+      <SolutionArchitectureDiagrams />
     </div></section>
 
     <section id="value-validation" className="scroll-mt-[172px] bg-[#f7f8f9] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">

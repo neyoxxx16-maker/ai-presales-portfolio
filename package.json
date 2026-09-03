@@ -2,6 +2,9 @@
   "name": "ai-presales-portfolio",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.3.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,15 +15,19 @@
     "test:rag": "node scripts/test-tea-rag.cjs",
     "test:tender": "node scripts/test-tender-agent.cjs",
     "smoke:tender-rag": "node scripts/smoke-tender-hybrid-rag.cjs",
+    "smoke:tea-production-rag": "node scripts/smoke-tea-production-rag.cjs",
     "test:tender:ocr": "python scripts/test-paddle-ocr.py",
     "build:tea-index": "node scripts/build-tea-index.cjs",
     "eval:tea-rag": "node scripts/eval-tea-rag.cjs"
   },
   "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
+    "@vercel/blob": "^2.8.0",
     "gsap": "^3.15.0",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.2",
-    "next": "15.4.6",
+    "next": "^15.5.25",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "19.1.0",
     "react-dom": "19.1.0"
@@ -31,7 +38,7 @@
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "^15.4.6",
+    "eslint-config-next": "^15.5.25",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"

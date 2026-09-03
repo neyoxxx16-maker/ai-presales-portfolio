@@ -23,12 +23,11 @@ export async function GET() {
   const workspace = await workspaceStats();
   const chunks = await listCompanyChunks();
   const embedding = embeddingProviderStatus();
-  const ocrProvider = process.env.TENDER_OCR_PROVIDER || "paddleocr";
+  const ocrProvider = (process.env.TENDER_OCR_PROVIDER || "azure-document-intelligence").trim().toLowerCase();
   const ocrReady =
-    ocrProvider === "paddleocr" ||
-    (ocrProvider === "azure-document-intelligence" &&
-      process.env.TENDER_OCR_ENDPOINT &&
-      process.env.TENDER_OCR_API_KEY);
+    ["azure", "azure-read", "azure-document-intelligence"].includes(ocrProvider) &&
+    process.env.TENDER_OCR_ENDPOINT &&
+    process.env.TENDER_OCR_API_KEY;
   return NextResponse.json({
     capabilities: {
       deepSeek: {
@@ -141,6 +140,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     console.error("Tender Agent request failed", code || "unknown_error");
+    if (code.startsWith("STORAGE_UNAVAILABLE"))
+      return NextResponse.json({ code: "STORAGE_UNAVAILABLE", message: "STORAGE_UNAVAILABLE" }, { status: 503 });
     const message =
       code === "unsupported_file_type"
         ? "仅支持 PDF、DOCX、TXT 或 Markdown 格式的招标文件。"
