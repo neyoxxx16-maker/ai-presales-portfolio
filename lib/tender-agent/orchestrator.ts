@@ -1094,38 +1094,48 @@ function directAnswer(state: State) {
 }
 function ruleAnalysisConclusion(matches: RequirementMatch[]) {
   const analysis = summary(matches, true);
-  const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => ({ qualification: "资格条件", technical: "系统能力", business: "商务响应", delivery: "实施交付", "after-sales": "服务保障", time: "进度安排" })[item.category]))).filter(Boolean).slice(0, 3);
+  const categoryNames: Record<string, string> = {
+    "资格审查": "资格条件",
+    "技术偏离": "系统能力",
+    "商务要求": "商务响应",
+    "实施交付": "实施交付",
+    "售后服务": "服务保障",
+    "时间要求": "进度安排",
+  };
+  const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => categoryNames[item.category]))).filter(Boolean).slice(0, 3);
   const gaps = matches.filter((item) => item.status !== "PASS");
-  const focus = Array.from(new Set(gaps.map((item) => ({ qualification: "资格条件", technical: "技术能力", business: "商务响应", delivery: "交付安排", "after-sales": "服务保障", time: "进度要求" })[item.category]))).filter(Boolean).slice(0, 3);
+  const focus = Array.from(new Set(gaps.map((item) => categoryNames[item.category]))).filter(Boolean).slice(0, 3);
   const judgment = analysis.recommendation === "可投" ? "当前初步判断：可投。" : analysis.recommendation === "有条件可投" ? "当前初步判断：有条件可投。" : analysis.recommendation === "不建议投" ? "当前初步判断：不建议投。" : "当前初步判断：暂缓决策。";
   const reason = supported.length
-    ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但仍有${gaps.length}项关键要求需要核验或补充` : "，整体准备较为充分"}。`
-    : `现有材料尚不足以确认核心资格或关键技术能力，仍有${gaps.length || analysis.totalRequirements}项需要核验或补充。`;
+    ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但${focus.join("、") || "关键条件"}仍需核验` : "，整体准备较为充分"}。`
+    : `现有材料尚不足以确认核心资格或关键技术能力，${focus.join("、") || "关键条件"}仍需核验。`;
   const action = gaps.length
-    ? `建议优先补充${priorityTenderMaterials(gaps).join("、")}，具体逐条清单见下方“建议补充材料”。`
+    ? `建议优先准备：${priorityTenderMaterialPackages(gaps).join("；")}。具体逐条要求见下方“建议补充材料”。`
     : "建议复核关键证明材料的适用范围后，按既定节奏推进投标准备。";
   return `${judgment}${reason}${action}`.replace(/\s+/g, " ").trim().slice(0, 220);
 }
-export function priorityTenderMaterials(matches: RequirementMatch[]) {
+export function priorityTenderMaterialPackages(matches: RequirementMatch[]) {
   const ranked = [...matches].sort((left, right) => Number(right.mandatory) - Number(left.mandatory) || Number(right.risk === "HIGH") - Number(left.risk === "HIGH") || Number(left.status === "MISSING_EVIDENCE") - Number(right.status === "MISSING_EVIDENCE"));
-  const labels: string[] = [];
+  const packages = new Set<string>();
   for (const match of ranked) {
     const text = `${match.requirement} ${match.category}`;
-    const label = /营业执照|主体资格|统一社会信用|投标人资格/.test(text) ? "营业执照/主体资格证明"
-      : /法人|授权|委托|签章/.test(text) ? "法人或授权材料"
-      : /财务|审计|资信|银行/.test(text) ? "财务或资信材料"
-      : /合同|案例|验收|中标|业绩/.test(text) ? "项目案例或业绩证明"
-      : /人员|项目经理|工程师|社保|简历/.test(text) ? "项目人员证明"
-      : /实施|交付|售后|服务|SLA|培训/.test(text) ? "实施或服务材料"
-      : /信用|节能|环保|中小企业|合规|声明/.test(text) ? "合规声明或信用证明"
-      : /技术|参数|规格|功能|性能|测试|认证|ISO|产品/.test(text) ? "核心技术证明"
-      : match.category === "资格审查" ? "关键资格证明"
-      : match.category === "技术偏离" ? "核心技术证明"
-      : "相关证明材料";
-    if (!labels.includes(label)) labels.push(label);
-    if (labels.length === 5) break;
+    const materialPackage = /营业执照|主体资格|统一社会信用|投标人资格|法人|授权|委托|签章/.test(text)
+      ? "主体及授权材料（营业执照、法人/授权文件）"
+      : /财务|审计|资信|银行/.test(text)
+        ? "财务及资信材料（财务报表、资信证明）"
+        : /技术|参数|规格|功能|性能|测试|认证|ISO|产品/.test(text) || match.category === "技术偏离"
+          ? "技术证明材料（产品参数、测试/认证材料）"
+          : /合同|案例|验收|中标|业绩|人员|项目经理|工程师|社保|简历/.test(text)
+            ? "项目及人员材料（合同/验收、人员资质）"
+            : /信用|节能|环保|中小企业|合规|声明|实施|交付|售后|服务|SLA|培训/.test(text)
+              ? "合规及服务材料（信用声明、实施/服务承诺）"
+              : match.category === "资格审查"
+                ? "主体及授权材料（营业执照、主体资格证明）"
+                : "技术证明材料（产品参数、测试/认证材料）";
+    packages.add(materialPackage);
+    if (packages.size === 5) break;
   }
-  return labels.length ? labels : ["关键证明材料"];
+  return packages.size ? [...packages] : ["关键证明材料（主体资格证明、技术参数材料）"];
 }
 async function execute(state: State, id: TenderToolName): Promise<void> {
   const started = Date.now();

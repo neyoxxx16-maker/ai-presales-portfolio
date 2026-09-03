@@ -943,6 +943,7 @@ function ResultView({
               : "AI 分析结论"}
           </p>
           <div className="mt-2 text-xs leading-6 text-neutral-700"><MarkdownText value={result.finalAnswer} /></div>
+          {result.matches.some((item) => item.status === "MISSING_EVIDENCE" || (item.status === "PENDING" && item.mandatory)) ? <button type="button" onClick={() => document.getElementById("supplement-materials")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="mt-2 text-xs font-medium text-emerald-800 underline-offset-2 transition hover:underline">查看建议补充材料 ↓</button> : null}
           {result.finalAnswerStatus === "failed" && result.finalAnswerError && <p className="mt-2 text-[11px] leading-5 text-amber-800">失败原因：{result.finalAnswerError}</p>}
         </article>
         <p className="mt-4 text-xs text-neutral-500">
@@ -1298,7 +1299,7 @@ function Overview({
           {result.agentConclusion}
         </p>
       </section>
-      <section className="rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
+      <section id="supplement-materials" className="scroll-mt-24 rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
         <p className="text-sm font-medium">建议补充材料</p>
         <p className="mt-1 text-xs leading-5 text-neutral-500">仅汇总当前要求中资料缺失或关键待确认事项，不会虚构材料。</p>
         {materialGaps.length ? (
