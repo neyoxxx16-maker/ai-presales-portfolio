@@ -1285,8 +1285,12 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
     return;
   }
   if (id === "webVerify") {
+    const verificationQuery = [
+      state.document.projectInfo.projectName,
+      ...state.document.requirements.slice(0, 6).map((item) => item.requirement.slice(0, 80)),
+    ].filter(Boolean).join(" ").slice(0, 600);
     const verified = await externalSearch(
-      `${state.document.projectInfo.projectName} ${state.document.requirements.map((item) => item.requirement).join(" ")}`,
+      verificationQuery,
     );
     state.externalVerification = verified;
     const sources: TenderSource[] = verified.results.map((item, index) => ({
@@ -1303,7 +1307,11 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
         "仅核验时效性外部事实",
         verified.status === "NOT_CONFIGURED"
           ? "Tavily 未配置，已明确降级；外部资料不会替代内部企业事实。"
-          : `外部核验状态：${verified.status}，返回 ${sources.length} 条结果。`,
+          : verified.status === "COMPLETED"
+            ? `外部核验成功，返回 ${sources.length} 条结果。`
+            : verified.error === "no_results"
+              ? "Tavily 请求成功，但未返回可用结果。"
+              : `Tavily 外部核验未完成：${verified.error ?? "unknown_error"}。`,
         sources,
         verified.status === "NOT_CONFIGURED"
           ? "not_configured"
@@ -1315,7 +1323,7 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
           provider: "tavily",
           fallback:
             verified.status === "NOT_CONFIGURED" ? "Tavily 未配置" : undefined,
-          error: verified.status === "FAILED" ? "Tavily 请求失败" : undefined,
+          error: verified.status === "FAILED" ? verified.error : undefined,
         },
       ),
     );
