@@ -23,12 +23,14 @@ const readableSize = (size: number) =>
 
 export function TenderFileDropzone({
   companyMode,
+  projectId,
   onBusy,
   onFilesReady,
   onRemoveRestored,
   restoredFiles = [],
 }: {
   companyMode: CompanyWorkspaceMode;
+  projectId: string;
   onBusy: (busy: boolean) => void;
   onFilesReady: (files: File[], parsedFiles: ParsedBidDocument[]) => void;
   onRemoveRestored: (file: ParsedBidDocument) => void;
@@ -71,6 +73,7 @@ export function TenderFileDropzone({
       const body = new FormData();
       additions.forEach((file) => body.append("file", file));
       body.append("companyMode", companyMode);
+      body.append("projectId", projectId);
       body.append("action", "parse");
       const response = await fetch("/api/tender-agent", {
         method: "POST",
@@ -102,7 +105,11 @@ export function TenderFileDropzone({
       if (inputRef.current) inputRef.current.value = "";
     }
   }
-  function remove(file: File) {
+  async function remove(file: File, parsed?: ParsedBidDocument) {
+    if (parsed?.storageKey) {
+      const response = await fetch("/api/tender-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "deleteFile", projectId, storageKey: parsed.storageKey }) });
+      if (!response.ok) { setMessage("文件存储删除失败，请重试。"); return; }
+    }
     const next = items.filter((item) => item.file !== file);
     setItems(next);
     onFilesReady(
@@ -210,7 +217,7 @@ export function TenderFileDropzone({
                   <button
                     type="button"
                     aria-label={`删除 ${item.fileName}`}
-                    onClick={() => item.file ? remove(item.file) : item.parsed && onRemoveRestored(item.parsed)}
+                    onClick={() => item.file ? void remove(item.file, item.parsed) : item.parsed && void onRemoveRestored(item.parsed)}
                     className="text-neutral-400 hover:text-red-700"
                   >
                     <Trash2 size={15} />

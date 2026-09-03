@@ -405,7 +405,9 @@ export function TenderAgentWorkspace() {
         ? await (() => {
             const body = new FormData();
             uploadedFiles.forEach((file) => body.append("file", file));
+            storedFiles.forEach((file) => body.append("storageKey", file.storageKey ?? ""));
             body.append("companyMode", companyMode);
+            body.append("projectId", analysisSessionId);
             body.append("action", "analyze");
             return fetch("/api/tender-agent", { method: "POST", body });
           })()
@@ -609,10 +611,15 @@ export function TenderAgentWorkspace() {
             <TenderFileDropzone
               key={analysisSessionId}
               companyMode={companyMode}
+              projectId={analysisSessionId}
               onBusy={setRunning}
               restoredFiles={storedFiles}
-              onRemoveRestored={(file) => {
+              onRemoveRestored={async (file) => {
                 if (!file.fileId) return;
+                if (file.storageKey) {
+                  const response = await fetch("/api/tender-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "deleteFile", projectId: analysisSessionId, storageKey: file.storageKey }) });
+                  if (!response.ok) { setError("文件存储删除失败，请重试。"); return; }
+                }
                 const next = deleteTenderProjectFile(analysisSessionId, file.fileId);
                 if (!next) return;
                 setStoredFiles(next.files);

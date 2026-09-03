@@ -5,6 +5,7 @@ import {
 } from "@/lib/tender-agent/company-workspace";
 import { embeddingProviderStatus } from "@/lib/tender-agent/embedding-provider";
 import { parseBidDocument } from "@/lib/tender-agent/file-parser";
+import { deleteTenderUpload, persistTenderUploads } from "@/lib/tender-agent/tender-upload-storage";
 import { tavilyConfigured } from "@/lib/tender-agent/external-verification";
 import {
   answerTenderQuestion,
@@ -79,21 +80,26 @@ export async function POST(request: Request) {
       const companyMode =
         formData.get("companyMode") === "workspace" ? "workspace" : "demo";
       const action = String(formData.get("action") || "analyze");
-      if (action === "parse")
+      const projectId = String(formData.get("projectId") || "");
+      const storageKeys = formData.getAll("storageKey").map(String);
+      if (action === "parse") {
+        const parsedFiles = await Promise.all(files.map((file) => parseBidDocument(file, true)));
+        const stored = await persistTenderUploads(files, projectId, storageKeys);
         return NextResponse.json({
-          files: await Promise.all(
-            files.map((file) => parseBidDocument(file, true)),
-          ),
+          files: parsedFiles.map((file, index) => ({ ...file, storageKey: stored[index]?.storageKey })),
         });
+      }
+      const stored = await persistTenderUploads(files, projectId, storageKeys);
       const result = await runTenderAgent({
         mode: "upload",
         files,
         companyMode,
       });
+      result.files = result.files?.map((file, index) => ({ ...file, storageKey: stored[index]?.storageKey }));
       return NextResponse.json({ files: result.files, result });
     }
     const body = (await request.json()) as Omit<TenderAgentRequest, "files"> & {
-      action?: "question";
+      action?: "question" | "deleteFile";
       analysisSessionId?: string;
       result?: TenderAgentResult;
       conversation?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -108,6 +114,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         await answerTenderQuestion(body.result, body.task.trim(), body.conversation),
       );
+    }
+    if (body.action === "deleteFile") {
+      const projectId = String((body as { projectId?: unknown }).projectId || "");
+      const storageKey = String((body as { storageKey?: unknown }).storageKey || "");
+      await deleteTenderUpload(projectId, storageKey);
+      return NextResponse.json({ deleted: true });
     }
     if (body.action === "reanalyze") {
       if (!body.files?.length)
