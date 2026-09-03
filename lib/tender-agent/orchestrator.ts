@@ -1092,7 +1092,7 @@ function directAnswer(state: State) {
     ? "已完成证据分析；请查看逐条结论与来源。"
     : "已完成文件解析；当前任务未要求企业资料或外部核验。";
 }
-function ruleAnalysisConclusion(matches: RequirementMatch[]) {
+export function ruleAnalysisConclusion(matches: RequirementMatch[]) {
   const analysis = summary(matches, true);
   const categoryNames: Record<string, string> = {
     "资格审查": "资格条件",
@@ -1102,9 +1102,10 @@ function ruleAnalysisConclusion(matches: RequirementMatch[]) {
     "售后服务": "服务保障",
     "时间要求": "进度安排",
   };
-  const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => categoryNames[item.category]))).filter(Boolean).slice(0, 3);
   const gaps = matches.filter((item) => item.status !== "PASS");
   const focus = Array.from(new Set(gaps.map((item) => categoryNames[item.category]))).filter(Boolean).slice(0, 3);
+  const focusSet = new Set(focus);
+  const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => categoryNames[item.category]).filter((category) => category && !focusSet.has(category)))).slice(0, 3);
   const judgment = analysis.recommendation === "可投" ? "当前初步判断：可投。" : analysis.recommendation === "有条件可投" ? "当前初步判断：有条件可投。" : analysis.recommendation === "不建议投" ? "当前初步判断：不建议投。" : "当前初步判断：暂缓决策。";
   const reason = supported.length
     ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但${focus.join("、") || "关键条件"}仍需核验` : "，整体准备较为充分"}。`
@@ -1116,26 +1117,33 @@ function ruleAnalysisConclusion(matches: RequirementMatch[]) {
 }
 export function priorityTenderMaterialPackages(matches: RequirementMatch[]) {
   const ranked = [...matches].sort((left, right) => Number(right.mandatory) - Number(left.mandatory) || Number(right.risk === "HIGH") - Number(left.risk === "HIGH") || Number(left.status === "MISSING_EVIDENCE") - Number(right.status === "MISSING_EVIDENCE"));
-  const packages = new Set<string>();
+  const packageLabels = {
+    subject: "主体及授权材料（营业执照、法人/授权文件）",
+    finance: "财务及资信材料（财务报表、资信证明）",
+    technical: "技术证明材料（产品参数、测试/认证材料）",
+    project: "项目及人员材料（合同/验收、人员资质）",
+    compliance: "合规及服务材料（信用声明、实施/服务承诺）",
+  } as const;
+  const packages = new Set<keyof typeof packageLabels>();
   for (const match of ranked) {
     const text = `${match.requirement} ${match.category}`;
     const materialPackage = /营业执照|主体资格|统一社会信用|投标人资格|法人|授权|委托|签章/.test(text)
-      ? "主体及授权材料（营业执照、法人/授权文件）"
+      ? "subject"
       : /财务|审计|资信|银行/.test(text)
-        ? "财务及资信材料（财务报表、资信证明）"
+        ? "finance"
         : /技术|参数|规格|功能|性能|测试|认证|ISO|产品/.test(text) || match.category === "技术偏离"
-          ? "技术证明材料（产品参数、测试/认证材料）"
+          ? "technical"
           : /合同|案例|验收|中标|业绩|人员|项目经理|工程师|社保|简历/.test(text)
-            ? "项目及人员材料（合同/验收、人员资质）"
+            ? "project"
             : /信用|节能|环保|中小企业|合规|声明|实施|交付|售后|服务|SLA|培训/.test(text)
-              ? "合规及服务材料（信用声明、实施/服务承诺）"
+              ? "compliance"
               : match.category === "资格审查"
-                ? "主体及授权材料（营业执照、主体资格证明）"
-                : "技术证明材料（产品参数、测试/认证材料）";
+                ? "subject"
+                : "technical";
     packages.add(materialPackage);
     if (packages.size === 5) break;
   }
-  return packages.size ? [...packages] : ["关键证明材料（主体资格证明、技术参数材料）"];
+  return packages.size ? [...packages].map((id) => packageLabels[id]) : ["关键证明材料（主体资格证明、技术参数材料）"];
 }
 async function execute(state: State, id: TenderToolName): Promise<void> {
   const started = Date.now();
