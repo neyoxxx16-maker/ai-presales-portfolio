@@ -1013,7 +1013,7 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
     {
       role: "system",
       content:
-        '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。任何关键证据不足时，明确写“待确认”，并在 answer 中提出需要用户补充的材料。只输出一个合法 JSON 对象：禁止 Markdown、```json code fence、JSON 前后说明。Schema：{"answer":string,"recommendation":string,"citations":[{"sourceId":string,"requirementId":string}],"risks":[string],"suggestions":{"REQ-ID":string}}。answer 必填且不超过 1500 个汉字；recommendation/citations/risks 无内容时分别使用空字符串、[]、[]；risks 最多 8 条。citations 只能使用给定 sourceId。suggestions 可为空对象；每一条 suggestion 必须保留“来源：”并引用给定 sourceId；无证据则写“待确认：当前资料未检索到…”。',
+        '你是证据约束的投标技术应答生成器。仅使用给定的招标要求、内部证据和已完成的规则分析。不得把外部资料写成我方事实，不得编造资质、案例、参数或价格。answer 只写面向项目负责人的自然语言简短判断：当前建议、主要原因、下一步行动，100～180 个中文字符，不得出现 REQ/CAP/DOC/COMPANY 编号、Evidence 索引、来源字段或逐条清单。只输出一个合法 JSON 对象：禁止 Markdown、```json code fence、JSON 前后说明。Schema：{"answer":string,"recommendation":string,"citations":[{"sourceId":string,"requirementId":string}],"risks":[string],"suggestions":{"REQ-ID":string}}。answer 必填；recommendation/citations/risks 无内容时分别使用空字符串、[]、[]；risks 最多 8 条。citations 只能使用给定 sourceId。suggestions 可为空对象；每一条 suggestion 必须保留“来源：”并引用给定 sourceId；无证据则写“待确认：当前资料未检索到…”。',
     },
     {
       role: "user",
@@ -1095,16 +1095,17 @@ function directAnswer(state: State) {
 }
 function ruleAnalysisConclusion(matches: RequirementMatch[]) {
   const analysis = summary(matches, true);
-  const coreRisks = risks(matches).filter((item) => item.level === "HIGH").concat(risks(matches).filter((item) => item.level !== "HIGH")).slice(0, 3);
-  const gaps = matches.filter((item) => ["PENDING", "MISSING_EVIDENCE", "FAIL"].includes(item.status)).slice(0, 3);
-  return [
-    "综合分析结论",
-    "AI结构化生成异常，本结论由规则分析结果生成。",
-    `投标建议：${analysis.recommendation}。`,
-    `核心风险：${coreRisks.length ? `\n${coreRisks.map((item) => `- ${item.description}`).join("\n")}` : "当前规则分析未识别出需额外提示的风险。"}`,
-    `资料缺口：${gaps.length ? `\n${gaps.map((item) => `- ${item.requirement}：${item.suggestedAction}`).join("\n")}` : "当前规则分析未识别出明确的资料缺口。"}`,
-    "请以资格审查、技术偏离、评分分析和风险识别明细及原始证据为准。",
-  ].join("\n\n");
+  const supported = Array.from(new Set(matches.filter((item) => item.status === "PASS").map((item) => ({ qualification: "资格条件", technical: "系统能力", business: "商务响应", delivery: "实施交付", "after-sales": "服务保障", time: "进度安排" })[item.category]))).filter(Boolean).slice(0, 3);
+  const gaps = matches.filter((item) => item.status !== "PASS");
+  const focus = Array.from(new Set(gaps.map((item) => ({ qualification: "资格条件", technical: "技术能力", business: "商务响应", delivery: "交付安排", "after-sales": "服务保障", time: "进度要求" })[item.category]))).filter(Boolean).slice(0, 3);
+  const judgment = analysis.recommendation === "建议参与" ? "目前建议参与。" : analysis.recommendation === "有条件建议参与" ? "目前可有条件参与。" : analysis.recommendation === "不建议参与" ? "目前不建议参与。" : "目前建议暂缓决策，补齐关键材料后再判断。";
+  const reason = supported.length
+    ? `现有材料已覆盖${supported.join("、")}等主要方面${gaps.length ? `，但仍有${gaps.length}项关键要求需要核验或补充` : "，整体准备较为充分"}。`
+    : `现有材料尚不足以支撑关键要求判断，仍有${gaps.length || analysis.totalRequirements}项需要核验或补充。`;
+  const action = gaps.length
+    ? `建议优先处理${focus.join("、") || "关键资料"}，完成主体和有效性核验后再作最终投标决策。`
+    : "建议复核关键证明材料的适用范围后，按既定节奏推进投标准备。";
+  return `${judgment}${reason}${action}`.replace(/\s+/g, " ").trim().slice(0, 180);
 }
 async function execute(state: State, id: TenderToolName): Promise<void> {
   const started = Date.now();
@@ -1405,17 +1406,7 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
           section.responseSuggestion,
       }));
       state.solution = fallback;
-      const citations = Array.from(
-        new Map(
-          state.solution.sections
-            .flatMap((section) => section.sources)
-            .map((source) => [
-              source.id,
-              `【${source.id}】${source.title}（${source.location}）`,
-            ]),
-        ).values(),
-      );
-      state.finalAnswer = `${output.answer}${citations.length ? `\n\n证据索引：${citations.join("；")}` : "\n\n待确认：当前没有可引用的内部证据。"}`;
+      state.finalAnswer = ruleAnalysisConclusion(allMatches(state));
       state.finalAnswerStatus = "generated";
       state.execution.push(
         step(

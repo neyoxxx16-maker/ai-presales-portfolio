@@ -25,11 +25,13 @@ export function TenderFileDropzone({
   companyMode,
   onBusy,
   onFilesReady,
+  onRemoveRestored,
   restoredFiles = [],
 }: {
   companyMode: CompanyWorkspaceMode;
   onBusy: (busy: boolean) => void;
   onFilesReady: (files: File[], parsedFiles: ParsedBidDocument[]) => void;
+  onRemoveRestored: (file: ParsedBidDocument) => void;
   /** Parsed file metadata from a restored project; no binary file is re-uploaded. */
   restoredFiles?: ParsedBidDocument[];
 }) {
@@ -122,7 +124,7 @@ export function TenderFileDropzone({
         fileName: parsed.fileName,
         fileSize: parsed.fileSize,
         parsed,
-        removable: false,
+        removable: true,
         file: undefined,
       }));
   return (
@@ -204,18 +206,16 @@ export function TenderFileDropzone({
                     )}
                   </p>
                 </div>
-                {item.removable && item.file ? (
+                {item.removable ? (
                   <button
                     type="button"
                     aria-label={`删除 ${item.fileName}`}
-                    onClick={() => remove(item.file!)}
+                    onClick={() => item.file ? remove(item.file) : item.parsed && onRemoveRestored(item.parsed)}
                     className="text-neutral-400 hover:text-red-700"
                   >
                     <Trash2 size={15} />
                   </button>
-                ) : (
-                  <span className="text-[10px] text-neutral-400">历史已恢复</span>
-                )}
+                ) : null}
               </div>
             </div>
           ))}

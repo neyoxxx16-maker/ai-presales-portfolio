@@ -92,6 +92,31 @@ function toIndexItem(session: TenderProjectSession): TenderProjectIndexItem {
     lastAnalyzedAt,
   };
 }
+function stableFileId(projectId: string, file: ParsedBidDocument, index: number) {
+  const seed = `${projectId}:${file.fileName}:${file.fileSize}:${file.canonicalDocumentText.slice(0, 80)}:${index}`;
+  let hash = 0;
+  for (let cursor = 0; cursor < seed.length; cursor++) hash = (hash * 31 + seed.charCodeAt(cursor)) >>> 0;
+  return `tender-file-${hash.toString(36)}`;
+}
+export function hydrateTenderProjectFiles(projectId: string, files: ParsedBidDocument[]) {
+  return files.map((file, index) => ({ ...file, projectId, fileId: file.fileId ?? stableFileId(projectId, file, index) }));
+}
+/** Deletes one file from persisted project metadata without deleting the project itself. */
+export function deleteTenderProjectFile(projectId: string, fileId: string): TenderProjectSession | undefined {
+  const session = getTenderProjectSession(projectId);
+  if (!session) return undefined;
+  const files = hydrateTenderProjectFiles(projectId, session.files).filter((file) => file.fileId !== fileId);
+  const next: TenderProjectSession = {
+    ...session,
+    files,
+    result: files.length ? session.result ? { ...session.result, files } : undefined : undefined,
+    conversations: files.length ? session.conversations : [],
+    status: files.length ? session.status : "draft",
+    updatedAt: new Date().toISOString(),
+    lastAnalyzedAt: files.length ? session.lastAnalyzedAt : undefined,
+  };
+  return saveTenderProjectSession(next) ? next : undefined;
+}
 
 /** Project payloads are stored by id so one tender never overwrites another. */
 export function listTenderProjectSessions(): TenderProjectIndexItem[] {
@@ -101,16 +126,18 @@ export function listTenderProjectSessions(): TenderProjectIndexItem[] {
 }
 export function getTenderProjectSession(projectId: string): TenderProjectSession | undefined {
   const currentStorage = storage();
-  return parse<TenderProjectSession>(currentStorage?.getItem(projectKey(projectId)) ?? null);
+  const session = parse<TenderProjectSession>(currentStorage?.getItem(projectKey(projectId)) ?? null);
+  return session ? { ...session, files: hydrateTenderProjectFiles(projectId, session.files) } : undefined;
 }
 export function saveTenderProjectSession(session: TenderProjectSession): boolean {
   const currentStorage = storage();
   if (!currentStorage) return false;
   try {
-    currentStorage.setItem(projectKey(session.projectId), JSON.stringify(session));
+    const normalized = { ...session, files: hydrateTenderProjectFiles(session.projectId, session.files) };
+    currentStorage.setItem(projectKey(session.projectId), JSON.stringify(normalized));
     const nextIndex = [
-      toIndexItem(session),
-      ...listTenderProjectSessions().filter((item) => item.projectId !== session.projectId),
+      toIndexItem(normalized),
+      ...listTenderProjectSessions().filter((item) => item.projectId !== normalized.projectId),
     ];
     currentStorage.setItem(INDEX_KEY, JSON.stringify(nextIndex));
     return true;

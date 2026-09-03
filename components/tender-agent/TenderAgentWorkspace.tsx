@@ -24,6 +24,7 @@ import { TenderCompanyLibraryManager } from "@/components/tender-agent/TenderCom
 import { companyLibraryOverview, tenderKnowledge } from "@/data/tender/knowledge";
 import {
   deleteTenderProjectSession,
+  deleteTenderProjectFile,
   getActiveTenderProjectId,
   getTenderProjectSession,
   listTenderProjectSessions,
@@ -610,6 +611,20 @@ export function TenderAgentWorkspace() {
               companyMode={companyMode}
               onBusy={setRunning}
               restoredFiles={storedFiles}
+              onRemoveRestored={(file) => {
+                if (!file.fileId) return;
+                const next = deleteTenderProjectFile(analysisSessionId, file.fileId);
+                if (!next) return;
+                setStoredFiles(next.files);
+                setUploadedFiles([]);
+                setResult(next.result);
+                setConversation(next.conversations);
+                setLastAnalyzedAt(next.lastAnalyzedAt);
+                setAnalysisStale(false);
+                setSourceMismatch(false);
+                setError("");
+                setHistoryProjects(listTenderProjectSessions());
+              }}
               onFilesReady={(files, parsedFiles) => {
                 setError("");
                 setReviewedIds([]);

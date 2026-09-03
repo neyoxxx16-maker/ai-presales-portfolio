@@ -397,6 +397,11 @@ export type BidDocumentFileType =
   "TXT" | "MARKDOWN" | "DOCX" | "PDF" | "PNG" | "JPG" | "JPEG";
 export type BidDocumentParseStatus = "PARSED" | "OCR_REQUIRED";
 export type ParsedBidDocument = {
+  /** Stable lifecycle identity used by the current tender project after restore. */
+  fileId?: string;
+  projectId?: string;
+  /** Reserved for a persisted upload when a storage provider is configured. */
+  storageKey?: string;
   fileName: string;
   fileType: BidDocumentFileType;
   fileSize: number;
