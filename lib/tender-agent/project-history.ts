@@ -106,14 +106,19 @@ export function deleteTenderProjectFile(projectId: string, fileId: string): Tend
   const session = getTenderProjectSession(projectId);
   if (!session) return undefined;
   const files = hydrateTenderProjectFiles(projectId, session.files).filter((file) => file.fileId !== fileId);
+  const hasRecoverableContent = Boolean(session.result) || session.conversations.length > 0;
+  if (!files.length && !hasRecoverableContent) {
+    deleteTenderProjectSession(projectId);
+    return undefined;
+  }
   const next: TenderProjectSession = {
     ...session,
     files,
-    result: files.length ? session.result ? { ...session.result, files } : undefined : undefined,
-    conversations: files.length ? session.conversations : [],
-    status: files.length ? session.status : "draft",
+    result: session.result ? { ...session.result, files } : undefined,
+    conversations: session.conversations,
+    status: session.status,
     updatedAt: new Date().toISOString(),
-    lastAnalyzedAt: files.length ? session.lastAnalyzedAt : undefined,
+    lastAnalyzedAt: session.lastAnalyzedAt,
   };
   return saveTenderProjectSession(next) ? next : undefined;
 }
@@ -122,7 +127,13 @@ export function deleteTenderProjectFile(projectId: string, fileId: string): Tend
 export function listTenderProjectSessions(): TenderProjectIndexItem[] {
   const currentStorage = storage();
   const index = parse<TenderProjectIndexItem[]>(currentStorage?.getItem(INDEX_KEY) ?? null) ?? [];
-  return index.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const retained = index.filter((item) => {
+    const session = parse<TenderProjectSession>(currentStorage?.getItem(projectKey(item.projectId)) ?? null);
+    return Boolean(session && (session.files.length || session.result || session.conversations.length));
+  });
+  if (currentStorage && retained.length !== index.length)
+    currentStorage.setItem(INDEX_KEY, JSON.stringify(retained));
+  return retained.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 export function getTenderProjectSession(projectId: string): TenderProjectSession | undefined {
   const currentStorage = storage();

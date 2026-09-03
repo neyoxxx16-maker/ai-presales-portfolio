@@ -621,7 +621,11 @@ export function TenderAgentWorkspace() {
                   if (!response.ok) { setError("文件存储删除失败，请重试。"); return; }
                 }
                 const next = deleteTenderProjectFile(analysisSessionId, file.fileId);
-                if (!next) return;
+                if (!next) {
+                  setHistoryProjects(listTenderProjectSessions());
+                  beginNewSession();
+                  return;
+                }
                 setStoredFiles(next.files);
                 setUploadedFiles([]);
                 setResult(next.result);
@@ -635,6 +639,12 @@ export function TenderAgentWorkspace() {
               onFilesReady={(files, parsedFiles) => {
                 setError("");
                 setReviewedIds([]);
+                if (!files.length && !parsedFiles.length && !result && !conversation.length) {
+                  deleteTenderProjectSession(analysisSessionId);
+                  setHistoryProjects(listTenderProjectSessions());
+                  beginNewSession();
+                  return;
+                }
                 const removedExistingFile = uploadedFiles.some((file) => !files.some((next) => next.name === file.name && next.size === file.size));
                 const onlyAppended = uploadedFiles.length > 0 && uploadedFiles.every((file) => files.some((next) => next.name === file.name && next.size === file.size));
                 if (removedExistingFile || (result && !onlyAppended)) beginNewSession();
