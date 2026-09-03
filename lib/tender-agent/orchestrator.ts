@@ -931,41 +931,71 @@ async function deepSeekChoice(
   }
 }
 type GroundedResponse = { answer: string; recommendation: string; citations: Array<{ sourceId: string; requirementId?: string }>; risks: string[]; suggestions: Record<string, string> };
-type GroundedResponseAttempt = { output?: GroundedResponse; error?: string; raw?: string; missingFields: string[] };
-function structuredOutputDiagnostic(values: { responseFormatUsed: boolean; rawResponseLength: number; parseSuccess: boolean; retryCount: number; schemaValidationSuccess: boolean; missingFields: string[] }) { console.info("[tender-structured-output]", values); }
+type GroundedResponseAttempt = { output?: GroundedResponse; error?: string; raw?: string; missingFields: string[]; responseShape: string; parseFailure?: string };
+function structuredOutputDiagnostic(values: { responseFormatUsed: boolean; rawResponseLength: number; responseShape: string; parseSuccess: boolean; retryCount: number; schemaValidationSuccess: boolean; missingFields: string[]; parseFailure?: string }) { console.info("[tender-structured-output]", values); }
 function stringList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()).slice(0, 20) : []; }
 function citations(value: unknown) { return Array.isArray(value) ? value.flatMap((item) => { if (typeof item === "string" && item.trim()) return [{ sourceId: item.trim() }]; if (!item || typeof item !== "object") return []; const record = item as { sourceId?: unknown; id?: unknown; requirementId?: unknown }; const sourceId = typeof record.sourceId === "string" ? record.sourceId : typeof record.id === "string" ? record.id : ""; return sourceId ? [{ sourceId, ...(typeof record.requirementId === "string" ? { requirementId: record.requirementId } : {}) }] : []; }).slice(0, 30) : []; }
+function responseShape(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "empty";
+  if (/^```(?:json)?\s*/i.test(trimmed)) return "json_code_fence";
+  if (/^\{/.test(trimmed)) return "json_object_or_prose_object";
+  if (/^\[/.test(trimmed)) return "json_array";
+  return trimmed.includes("{") || trimmed.includes("[") ? "prose_wrapped_json" : "plain_text";
+}
+function removeJsonFence(raw: string) {
+  return raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+}
+function firstCompleteJsonObject(raw: string) {
+  for (let start = raw.indexOf("{"); start >= 0; start = raw.indexOf("{", start + 1)) {
+    let depth = 0; let quoted = false; let escaped = false;
+    for (let index = start; index < raw.length; index++) {
+      const char = raw[index];
+      if (quoted) { if (escaped) escaped = false; else if (char === "\\") escaped = true; else if (char === '"') quoted = false; continue; }
+      if (char === '"') { quoted = true; continue; }
+      if (char === "{") depth++;
+      if (char === "}" && --depth === 0) {
+        const candidate = raw.slice(start, index + 1);
+        try { return JSON.parse(candidate) as unknown; } catch { break; }
+      }
+    }
+  }
+  return undefined;
+}
+function nestedRecords(value: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > 3 || !value || typeof value !== "object") return [];
+  if (Array.isArray(value)) return value.flatMap((item) => nestedRecords(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  return [record, ...Object.values(record).flatMap((item) => nestedRecords(item, depth + 1))];
+}
 export function parseGroundedResponse(raw: string): GroundedResponseAttempt {
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const candidates = [cleaned]; let start = cleaned.indexOf("{"); let depth = 0; let quoted = false; let escaped = false;
-  for (let index = start; index >= 0 && index < cleaned.length; index++) {
-    const char = cleaned[index];
-    if (quoted) { if (escaped) escaped = false; else if (char === "\\") escaped = true; else if (char === '"') quoted = false; continue; }
-    if (char === '"') { quoted = true; continue; }
-    if (char === "{") depth++;
-    if (char === "}" && --depth === 0) { candidates.push(cleaned.slice(start, index + 1)); break; }
-  }
-  for (const candidate of candidates) {
-    try {
-      const value = JSON.parse(candidate) as { answer?: unknown; conclusion?: unknown; summary?: unknown; finalAnswer?: unknown; recommendation?: unknown; suggestions?: unknown; citations?: unknown; evidence?: unknown; risks?: unknown };
-      const answer = [value.answer, value.conclusion, value.summary, value.finalAnswer, value.recommendation].find((item): item is string => typeof item === "string" && Boolean(item.trim()));
-      const missingFields = [
-        ...(answer ? [] : ["answer"]),
-        ...(typeof value.recommendation === "string" ? [] : ["recommendation"]),
-        ...(Array.isArray(value.citations) || Array.isArray(value.evidence) ? [] : ["citations"]),
-        ...(Array.isArray(value.risks) ? [] : ["risks"]),
-      ];
+  const shape = responseShape(raw);
+  const cleaned = removeJsonFence(raw);
+  const values: unknown[] = [];
+  try { values.push(JSON.parse(cleaned) as unknown); } catch { /* Fall through to a complete object embedded in prose. */ }
+  const embedded = firstCompleteJsonObject(cleaned);
+  if (embedded !== undefined) values.push(embedded);
+  let parsedJson = values.length > 0;
+  for (const value of values) {
+    for (const record of nestedRecords(value)) {
+      const answer = [record.answer, record.conclusion, record.summary, record.finalAnswer, record.final_answer, record.recommendation].find((item): item is string => typeof item === "string" && Boolean(item.trim()));
       if (!answer) continue;
-      const suggestions = typeof value.suggestions === "object" && value.suggestions && !Array.isArray(value.suggestions)
-        ? Object.fromEntries(Object.entries(value.suggestions).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())))
+      const missingFields = [
+        ...(typeof record.answer === "string" && record.answer.trim() ? [] : ["answer"]),
+        ...(typeof record.recommendation === "string" ? [] : ["recommendation"]),
+        ...(Array.isArray(record.citations) || Array.isArray(record.evidence) ? [] : ["citations"]),
+        ...(Array.isArray(record.risks) ? [] : ["risks"]),
+      ];
+      const suggestions = typeof record.suggestions === "object" && record.suggestions && !Array.isArray(record.suggestions)
+        ? Object.fromEntries(Object.entries(record.suggestions).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())))
         : {};
-      return { output: { answer: answer.trim().slice(0, 5000), recommendation: typeof value.recommendation === "string" ? value.recommendation.trim().slice(0, 2000) : "", citations: citations(value.citations ?? value.evidence), risks: stringList(value.risks), suggestions }, missingFields };
-    } catch { /* Try the JSON object extracted from surrounding prose. */ }
+      return { output: { answer: answer.trim().slice(0, 5000), recommendation: typeof record.recommendation === "string" ? record.recommendation.trim().slice(0, 2000) : "", citations: citations(record.citations ?? record.evidence), risks: stringList(record.risks), suggestions }, missingFields, responseShape: shape, parseFailure: missingFields.includes("answer") ? "answer_mapped_from_compatible_field" : undefined };
+    }
   }
-  return { error: "DeepSeek 返回内容不是符合 schema 的 JSON 对象，或缺少核心 answer 字段。", raw: cleaned.slice(0, 6000), missingFields: ["answer"] };
+  return { error: "DeepSeek 返回内容不是符合 schema 的 JSON 对象，或缺少核心 answer 字段。", raw: cleaned.slice(0, 6000), missingFields: ["answer"], responseShape: shape, parseFailure: parsedJson ? "answer_missing_or_invalid" : "invalid_json" };
 }
 async function composeGroundedResponse(state: State): Promise<GroundedResponseAttempt> {
-  if (!process.env.DEEPSEEK_API_KEY || !state.document) return { error: "DeepSeek 未配置或招标文本未就绪。", missingFields: ["answer"] };
+  if (!process.env.DEEPSEEK_API_KEY || !state.document) return { error: "DeepSeek 未配置或招标文本未就绪。", missingFields: ["answer"], responseShape: "not_requested", parseFailure: "missing_configuration_or_document" };
   const matches = allMatches(state);
   const evidence = matches
     .flatMap((match) =>
@@ -1016,14 +1046,14 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
         signal: AbortSignal.timeout(20000),
       },
     );
-    if (!response.ok) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"] }); return { error: `DeepSeek 综合结论 HTTP ${response.status}`, missingFields: ["answer"] }; }
+    if (!response.ok) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, responseShape: "http_error", parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"], parseFailure: `http_${response.status}` }); return { error: `DeepSeek 综合结论 HTTP ${response.status}`, missingFields: ["answer"], responseShape: "http_error", parseFailure: `http_${response.status}` }; }
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const raw = data.choices?.[0]?.message?.content;
-    if (!raw) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"] }); return { error: "DeepSeek 综合结论响应为空。", missingFields: ["answer"] }; }
+    if (!raw) { structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, responseShape: "empty", parseSuccess: false, retryCount, schemaValidationSuccess: false, missingFields: ["answer"], parseFailure: "empty_content" }); return { error: "DeepSeek 综合结论响应为空。", missingFields: ["answer"], responseShape: "empty", parseFailure: "empty_content" }; }
     const parsed = parseGroundedResponse(raw);
-    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: raw.length, parseSuccess: Boolean(parsed.output), retryCount, schemaValidationSuccess: Boolean(parsed.output?.answer), missingFields: parsed.missingFields });
+    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: raw.length, responseShape: parsed.responseShape, parseSuccess: Boolean(parsed.output), retryCount, schemaValidationSuccess: Boolean(parsed.output?.answer), missingFields: parsed.missingFields, parseFailure: parsed.parseFailure });
     return parsed;
   };
   try {
@@ -1034,10 +1064,11 @@ async function composeGroundedResponse(state: State): Promise<GroundedResponseAt
       { role: "assistant", content: first.raw ?? "" },
       { role: "user", content: '将上一条模型输出转换为唯一合法 JSON 对象。只可使用已提供的招标要求、规则分析和证据；不得补充新事实。禁止 Markdown、code fence 和解释。answer 必填。Schema：{"answer":string,"recommendation":string,"citations":[{"sourceId":string,"requirementId":string}],"risks":[string],"suggestions":{"REQ-ID":string}}。' },
     ], 1);
-    return repaired.output ? repaired : { error: repaired.error ?? first.error ?? "DeepSeek structured output 修复失败。", missingFields: repaired.missingFields.length ? repaired.missingFields : first.missingFields };
+    return repaired.output ? repaired : { error: repaired.error ?? first.error ?? "DeepSeek structured output 修复失败。", missingFields: repaired.missingFields.length ? repaired.missingFields : first.missingFields, responseShape: repaired.responseShape, parseFailure: repaired.parseFailure ?? first.parseFailure };
   } catch (error) {
-    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, parseSuccess: false, retryCount: 0, schemaValidationSuccess: false, missingFields: ["answer"] });
-    return { error: `DeepSeek 综合结论请求失败：${error instanceof Error ? error.message : "unknown_error"}`, missingFields: ["answer"] };
+    const reason = error instanceof Error ? error.message : "unknown_error";
+    structuredOutputDiagnostic({ responseFormatUsed: true, rawResponseLength: 0, responseShape: "request_error", parseSuccess: false, retryCount: 0, schemaValidationSuccess: false, missingFields: ["answer"], parseFailure: reason });
+    return { error: `DeepSeek 综合结论请求失败：${reason}`, missingFields: ["answer"], responseShape: "request_error", parseFailure: reason };
   }
 }
 function directAnswer(state: State) {
@@ -1061,6 +1092,19 @@ function directAnswer(state: State) {
   return state.matches.size
     ? "已完成证据分析；请查看逐条结论与来源。"
     : "已完成文件解析；当前任务未要求企业资料或外部核验。";
+}
+function ruleAnalysisConclusion(matches: RequirementMatch[]) {
+  const analysis = summary(matches, true);
+  const coreRisks = risks(matches).filter((item) => item.level === "HIGH").concat(risks(matches).filter((item) => item.level !== "HIGH")).slice(0, 3);
+  const gaps = matches.filter((item) => ["PENDING", "MISSING_EVIDENCE", "FAIL"].includes(item.status)).slice(0, 3);
+  return [
+    "综合分析结论",
+    "AI结构化生成异常，本结论由规则分析结果生成。",
+    `投标建议：${analysis.recommendation}。`,
+    `核心风险：${coreRisks.length ? `\n${coreRisks.map((item) => `- ${item.description}`).join("\n")}` : "当前规则分析未识别出需额外提示的风险。"}`,
+    `资料缺口：${gaps.length ? `\n${gaps.map((item) => `- ${item.requirement}：${item.suggestedAction}`).join("\n")}` : "当前规则分析未识别出明确的资料缺口。"}`,
+    "请以资格审查、技术偏离、评分分析和风险识别明细及原始证据为准。",
+  ].join("\n\n");
 }
 async function execute(state: State, id: TenderToolName): Promise<void> {
   const started = Date.now();
@@ -1379,19 +1423,21 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
       );
     } else {
       state.solution = fallback;
-      state.finalAnswer = "AI综合结论生成失败：DeepSeek 未返回可解析的受证据约束结论；规则分析结果仍可查看。";
-      state.finalAnswerStatus = "failed";
+      state.finalAnswer = ruleAnalysisConclusion(allMatches(state));
+      // The DeepSeek error remains in the trace, but a validated rule result is
+      // still a usable conclusion and must not make the whole analysis fail.
+      state.finalAnswerStatus = "generated";
       state.finalAnswerError = generated.error;
       state.execution.push(
         step(
           state,
           id,
           "已核验内部证据与偏离结论",
-          `DeepSeek 最终应答未成功返回：${generated.error ?? "unknown_error"}`,
+          "DeepSeek structured output 未通过校验或修复，已改用规则分析结论。",
           state.solution.sections.flatMap((item) => item.sources),
-          "failed",
+          "completed",
           started,
-          { provider: "deepseek", fallback: "DeepSeek 最终生成不可用", error: [state.lastDecisionError, generated.error].filter(Boolean).join("；") },
+          { provider: "rule-engine", fallback: "DeepSeek structured output 未通过校验或修复", error: [state.lastDecisionError, generated.error].filter(Boolean).join("；") },
         ),
       );
     }
@@ -1410,12 +1456,12 @@ async function execute(state: State, id: TenderToolName): Promise<void> {
         started,
         {
           provider:
-            state.finalAnswerStatus === "generated"
+            state.finalAnswerStatus === "generated" && !state.finalAnswerError
               ? "deepseek + rule-engine"
               : "rule-engine",
           fallback:
-            state.finalAnswerStatus === "failed"
-              ? "AI 综合结论生成失败，保留规则结论"
+            state.finalAnswerError
+              ? "DeepSeek structured output 未通过校验或修复，使用规则分析结论"
               : undefined,
         },
       ),
@@ -1658,6 +1704,43 @@ function projectWebQuery(document: TenderAgentResult["document"], fallback: stri
   if (knownProjectValue(info.projectName)) return `${info.projectName} 招标 采购`;
   return fallback;
 }
+function officialDomainsForQuestion(question: string) {
+  const domains = Array.from(question.matchAll(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b/gi), (match) => match[1].toLowerCase());
+  if (/浙江工业大学/.test(question)) return ["zhcg.zjut.edu.cn", "zjut.edu.cn"];
+  return domains.filter((domain) => /\.(?:gov|edu|org)\.cn$/.test(domain));
+}
+function publishedTimestamp(value?: string) {
+  if (!value) return 0;
+  const normalized = value.replace(/[年/.]/g, "-").replace(/月/g, "-").replace(/日/g, "");
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+function isOfficialListPage(url: string) {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return /(?:^|\/)(?:index|list|more)(?:\.|\/|$)/.test(path) || /(?:notice|announcement|采购公告)\/?$/.test(path);
+  } catch { return false; }
+}
+function officialLatestAnnouncementAnswer(verification: TenderAgentResult["externalVerification"], officialDomains: string[]) {
+  const official = verification.results
+    .filter((item) => officialDomains.some((domain) => item.domain === domain || item.domain.endsWith(`.${domain}`)))
+    .sort((a, b) => publishedTimestamp(b.publishedAt) - publishedTimestamp(a.publishedAt));
+  const dated = official.filter((item) => publishedTimestamp(item.publishedAt));
+  // Never replace a newer official list-page record with an older detail page.
+  // If Tavily did not return the matching detail page, return that list page clearly.
+  const latest = dated[0];
+  const officialList = official.find((item) => isOfficialListPage(item.url));
+  if (!latest)
+    return `未能从 ${officialDomains.join("、")} 的官方检索结果中取得可解析的发布日期，无法确认哪一条是最新公告。${officialList ? `\n\n官方公告列表：${officialList.url}` : ""}`;
+  return [
+    "已按官方页面发布日期倒序核验：",
+    ...(isOfficialListPage(latest.url) ? ["未取得该公告对应的官方详情页，以下返回官方公告列表页。"] : []),
+    `标题：${latest.title}`,
+    `发布日期：${latest.publishedAt}`,
+    `官方来源链接：${latest.url}`,
+    ...(officialList && officialList.url !== latest.url ? [`官方公告列表：${officialList.url}`] : []),
+  ].join("\n");
+}
 function validateProjectWebResults(verification: TenderAgentResult["externalVerification"], document: TenderAgentResult["document"]) {
   const info = document.projectInfo;
   const projectCode = knownProjectValue(info.projectCode) ? normalizeProjectValue(info.projectCode) : "";
@@ -1686,18 +1769,21 @@ export async function answerTenderQuestion(
   conversation: Array<{ role: "user" | "assistant"; content: string }> = [],
 ): Promise<{ answer: string; status: "completed" | "failed"; webSearch?: TenderAgentResult["externalVerification"]; webEvidence?: TenderSource[]; trace?: ExecutionStep }> {
   const explicitWebRequest = /官网|公告|请联网|联网核验|帮我搜索|查询官网|核验来源|给我链接|来源\s*url/i.test(question);
+  const officialSourceRequested = /官网|官方网站|官方来源/.test(question);
+  const wantsLatest = /最新|当前|现在|今日|最近/.test(question);
   const localTenderQuestion = /当前(?:上传)?招标文件|本项目|这份招标文件/.test(question);
   const needsWebSearch = explicitWebRequest || (!localTenderQuestion && /最新|当前|现在|今日|最近|政策|市场信息|厂商信息|最新价格|外部公开信息/.test(question));
-  const organization = question.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,}(?:大学|学院|公司|集团|官网)/)?.[0]?.replace(/官网$/, "");
+  const officialDomains = officialSourceRequested ? officialDomainsForQuestion(question) : [];
+  const organization = /浙江工业大学/.test(question) ? "浙江工业大学" : question.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,}(?:大学|学院|公司|集团|官网)/)?.[0]?.replace(/官网$/, "");
   const topic = question.match(/采购公告|招标公告|采购|招标|政策|API 文档|文档|价格|市场信息/)?.[0];
   const purchaser = result.document.projectInfo.purchaser;
   const explicitlyDifferentOrganization = Boolean(organization && knownProjectValue(purchaser) && !normalizeProjectValue(purchaser).includes(normalizeProjectValue(organization)));
   const projectBoundSearch = needsWebSearch && (localTenderQuestion || /当前项目|本项目|当前招标/.test(question)) && !explicitlyDifferentOrganization;
-  const genericQuery = `${organization ?? ""} ${topic ?? "公开信息"} ${/最新|当前|现在|今日|最近/.test(question) ? "最新" : ""}`.trim().slice(0, 100);
+  const genericQuery = `${organization ?? ""} ${topic ?? "公开信息"} ${wantsLatest ? "最新" : ""}`.trim().slice(0, 100);
   const webQuery = needsWebSearch
     ? projectBoundSearch ? projectWebQuery(result.document, genericQuery) : genericQuery
     : undefined;
-  const searched = webQuery ? await externalSearch(webQuery) : undefined;
+  const searched = webQuery ? await externalSearch(webQuery, officialDomains.length ? { includeDomains: officialDomains, sortByPublishedDate: wantsLatest, maxResults: 10 } : undefined) : undefined;
   const webSearch = searched && projectBoundSearch ? validateProjectWebResults(searched, result.document) : searched;
   const webEvidence: TenderSource[] = (webSearch?.results ?? []).map((item, index) => ({
     id: `WEB-CHAT-${index + 1}`,
@@ -1792,6 +1878,16 @@ export async function answerTenderQuestion(
     risks: result.risks.slice(0, 8),
     conversation: conversation.slice(-6),
   };
+  if (officialSourceRequested && wantsLatest && officialDomains.length && webSearch?.status === "COMPLETED")
+    return { answer: officialLatestAnnouncementAnswer(webSearch, officialDomains), status: "completed", webSearch, webEvidence, trace: webTrace };
+  if (officialSourceRequested && wantsLatest && officialDomains.length && webSearch)
+    return {
+      answer: `未能从 ${officialDomains.join("、")} 获得带可核验发布日期的官方采购公告，因此无法确认“最新”条目；未使用第三方转载替代官方来源。`,
+      status: "failed",
+      webSearch,
+      webEvidence,
+      trace: webTrace,
+    };
   if (!process.env.DEEPSEEK_API_KEY && webSearch?.status === "COMPLETED")
     return { answer: `已完成联网检索。${webEvidenceAppendix.trim()}`, status: "completed", webSearch, webEvidence, trace: webTrace };
   if (!process.env.DEEPSEEK_API_KEY && webSearch)
@@ -1820,7 +1916,7 @@ export async function answerTenderQuestion(
             {
               role: "system",
               content:
-                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。优先使用当前招标文件和企业资料；仅当代码层提供 webEvidence 时才可引用联网信息，绝不可自行声称联网、编造 URL 或日期。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。当用户问资质、条件、原文、依据或哪一页时，必须逐项给出“文件、页码、原文、判断”；pageNumber 缺失时只能写“页码未定位”及给定原因，绝不能猜测页码。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
+                "你是招投标项目问答助手。仅基于给定的已完成投标分析、证据和连续对话回答。优先使用当前招标文件和企业资料；仅当代码层提供 webEvidence 时才可引用联网信息，绝不可编造 URL 或日期。若 webEvidence 非空，必须明确说明“已通过联网检索获得以下结果”，再引用其中给定的来源；只有 webSearchFailure 已提供时才可说明联网未完成或无法联网。代词、补充材料和‘最大风险’均指当前项目及此前对话；不得重新执行 OCR、RAG、评分或外部搜索。不得虚构企业资质或招标事实；信息不足时明确说待确认并指出缺失材料。当用户问资质、条件、原文、依据或哪一页时，必须逐项给出“文件、页码、原文、判断”；pageNumber 缺失时只能写“页码未定位”及给定原因，绝不能猜测页码。面向业务用户写中文，不输出 PASS、PENDING、MISSING_EVIDENCE、FAIL、Demo、文件路径或内部状态码。",
             },
             {
               role: "user",
