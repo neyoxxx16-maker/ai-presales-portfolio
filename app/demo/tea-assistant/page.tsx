@@ -11,9 +11,10 @@ export default function TeaAssistantPage() {
     <main>
       <Navbar />
       <TeaHero />
+      <TeaChat />
+      <section className="mx-auto max-w-7xl px-5 pb-4 pt-8 lg:px-8 lg:pt-12"><p className="section-kicker">项目设计</p><h2 className="mt-5 text-3xl font-medium tracking-[-0.045em] sm:text-4xl">这个 Demo 是怎么做的？</h2></section>
       <BusinessProblem />
       <SolutionOverview />
-      <TeaChat />
       <PocNotice />
       <Footer />
     </main>

@@ -18,18 +18,19 @@ export function ResumeHero() {
             <div>
               <p className="text-sm font-medium text-white/80">黄念红 · AI 售前 / 解决方案工程师</p>
               <h1 data-hero-reveal className="mt-4 max-w-4xl text-5xl font-medium leading-[1.06] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
-                把业务问题整理成
+                先搞清楚业务问题，再做成
                 <br />
-                可验证的 AI 方案
+                客户能验证的AI方案。
               </h1>
               <p data-hero-reveal className="mt-7 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
-                数字媒体技术背景，正在围绕 AI 售前方向持续搭建可交互 Demo。
-                关注需求澄清、方案设计、RAG / Agent 落地、POC 测试与面试现场表达。
+                数字媒体技术背景，AI 售前方向，持续搭建可交互 Demo。
+                <br />
+                关注：需求澄清 → 方案设计 → RAG/Agent 落地 → POC 测试 → 面试表达。
               </p>
               <div data-hero-reveal className="mt-7 flex flex-wrap gap-2.5 text-sm">
-                <a href={siteConfig.links.resumePdf} download className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2.5 font-medium text-white transition hover:bg-black/80">
-                  下载 PDF 简历 <Download className="button-arrow" size={14} />
-                </a>
+                <Link href="/resume/pdf" className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2.5 font-medium text-white transition hover:bg-black/80">
+                  查看 PDF 简历 <Download className="button-arrow" size={14} />
+                </Link>
                 <a href={siteConfig.links.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
                   GitHub <ArrowUpRight className="button-arrow" size={14} />
                 </a>
@@ -52,10 +53,10 @@ export function ResumeHero() {
                 <p className="flex items-center gap-2"><MapPin size={15} /> 求职方向：AI 售前 / 解决方案工程师</p>
               </div>
               <Link
-                href="#projects"
+                href="/resume/pdf"
                 className="mt-5 inline-flex w-full items-center justify-between rounded-full bg-[#c7ff4d] px-4 py-3 text-sm font-semibold text-black"
               >
-                查看项目经历 <ArrowDownRight size={16} />
+                查看 PDF 简历 <ArrowDownRight size={16} />
               </Link>
             </div>
           </div>

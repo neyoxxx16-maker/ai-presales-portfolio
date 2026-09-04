@@ -101,24 +101,26 @@ function stableFileId(projectId: string, file: ParsedBidDocument, index: number)
 export function hydrateTenderProjectFiles(projectId: string, files: ParsedBidDocument[]) {
   return files.map((file, index) => ({ ...file, projectId, fileId: file.fileId ?? stableFileId(projectId, file, index) }));
 }
-/** Deletes one file from persisted project metadata without deleting the project itself. */
+/**
+ * Deletes one file and invalidates analysis derived from the previous file set.
+ * A project with no source files has no valid context, so it is removed entirely.
+ */
 export function deleteTenderProjectFile(projectId: string, fileId: string): TenderProjectSession | undefined {
   const session = getTenderProjectSession(projectId);
   if (!session) return undefined;
   const files = hydrateTenderProjectFiles(projectId, session.files).filter((file) => file.fileId !== fileId);
-  const hasRecoverableContent = Boolean(session.result) || session.conversations.length > 0;
-  if (!files.length && !hasRecoverableContent) {
+  if (!files.length) {
     deleteTenderProjectSession(projectId);
     return undefined;
   }
   const next: TenderProjectSession = {
     ...session,
     files,
-    result: session.result ? { ...session.result, files } : undefined,
-    conversations: session.conversations,
-    status: session.status,
+    result: undefined,
+    conversations: [],
+    status: "draft",
     updatedAt: new Date().toISOString(),
-    lastAnalyzedAt: session.lastAnalyzedAt,
+    lastAnalyzedAt: undefined,
   };
   return saveTenderProjectSession(next) ? next : undefined;
 }

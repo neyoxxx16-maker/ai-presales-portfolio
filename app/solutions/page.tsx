@@ -8,13 +8,13 @@ import { SolutionDeliveryCenter } from "@/components/solutions/SolutionDeliveryC
 import { siteConfig } from "@/lib/site-config";
 
 const featuredCases = [
-  { title: "一叶春山 AI 导购 / 知识服务 POC", label: "知识服务 POC", icon: MessageSquareText, scenario: "选茶推荐、产品问答与售后分流", problem: "SKU 与产品资料分散，人工客服需要反复查找；客户需要的是有依据的推荐，而不只是 FAQ。", solution: "将商品资料整理为可检索、可解释、可追溯的知识服务，并以规则约束推荐范围。", work: "需求场景拆解、知识边界设计、交互 Demo 与 POC 验证。", href: "/demo/tea-assistant", action: "体验 AI 导购" },
-  { title: "AI 招投标与方案生成 Agent", label: "多步骤 Agent POC", icon: FileSearch, scenario: "招标文件解析、企业资料检索、资格与风险审查", problem: "长文件中资格、评分与风险信息分散，售前需要先判断能不能投、缺什么、风险在哪里。", solution: "将解析、检索、资格匹配、风险分析与 Evidence 组织成可复核工作流。", work: "需求与验收口径定义、工作流设计、工具路径与 POC 测试。", href: "/demo/tender-agent", action: "体验 Agent" },
+  { title: "项目一：AI 导购 / 知识服务 POC", label: "知识服务 POC", icon: MessageSquareText, scenario: "选茶推荐、产品问答与售后分流", problem: "SKU 与产品资料分散，人工客服需要反复查找；客户需要的是有依据的推荐，而不只是 FAQ。", solution: "将商品资料整理为可检索、可解释、可追溯的知识服务，并以规则约束推荐范围。", work: "需求场景拆解、知识边界设计、交互 Demo 与 POC 验证。", href: "/demo/tea-assistant", action: "体验项目一：AI 导购" },
+  { title: "项目二：招投标 Agent", label: "多步骤 Agent POC", icon: FileSearch, scenario: "招标文件解析、企业资料检索、资格与风险审查", problem: "长文件中资格、评分与风险信息分散，售前需要先判断能不能投、缺什么、风险在哪里。", solution: "将解析、检索、资格匹配、风险分析与 Evidence 组织成可复核工作流。", work: "需求与验收口径定义、工作流设计、工具路径与 POC 测试。", href: "/demo/tender-agent", action: "体验项目二：招投标 Agent" },
 ] as const;
 
 const problemToPoc = [
-  { title: "AI 导购", problems: ["SKU 与产品资料分散", "人工客服重复查询", "用户需要推荐而非普通 FAQ"], judgment: "不是缺一个聊天框，而是缺一个可检索、可解释、可追溯的知识服务。", focus: ["RAG 检索", "推荐边界", "来源引用", "多轮问答"] },
-  { title: "招投标 Agent", problems: ["招标文件长", "资格、评分、风险信息分散", "人工审查耗时", "资料缺失难以及时发现"], judgment: "不是简单 PDF 摘要，而是一个多步骤判断与证据组织流程。", focus: ["OCR", "Hybrid RAG", "企业资料检索", "资格判断", "Evidence", "Agent Trace"] },
+  { title: "项目一：AI 导购", problems: ["SKU 与产品资料分散", "人工客服重复查询", "用户需要推荐而非普通 FAQ"], judgment: "不是缺一个聊天框，而是缺一个可检索、可解释、可追溯的知识服务。", focus: ["RAG 检索", "推荐边界", "来源引用", "多轮问答"] },
+  { title: "项目二：招投标 Agent", problems: ["招标文件长", "资格、评分、风险信息分散", "人工审查耗时", "资料缺失难以及时发现"], judgment: "不是简单 PDF 摘要，而是一个多步骤判断与证据组织流程。", focus: ["OCR", "Hybrid RAG", "企业资料检索", "资格判断", "Evidence", "Agent Trace"] },
 ] as const;
 
 const methodSteps = [
@@ -74,21 +74,21 @@ export default function SolutionsPage() {
     </div></section>
 
     <section id="solution-design" className="scroll-mt-[172px] bg-[#f7f8f9] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">
-      <SectionHeading index="02" title="售前方案方法论" description="展示从业务需求到技术方案之间的决策过程，而不只是罗列最终技术栈。" />
+      <SectionHeading index="02" title="售前方案方法论" description="不是上来就列技术栈，而是先讲清楚：业务需求怎么一步步变成了技术方案。" />
       <div className="mt-12 rounded-[28px] border border-black/5 bg-[#f7f8f9] p-6 sm:p-8"><p className="text-xs font-semibold tracking-[0.16em] text-neutral-400">售前方案方法论</p><div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{methodSteps.map(([title, description], index) => <article key={title} className="rounded-2xl bg-white p-5"><p className="text-xs font-semibold text-neutral-400">{String(index + 1).padStart(2, "0")}</p><h3 className="mt-6 font-medium">{title}</h3><p className="mt-2 text-xs leading-6 text-neutral-500">{description}</p></article>)}</div></div>
       <div className="mt-16 rounded-[28px] bg-black p-7 text-white sm:p-8"><p className="text-[11px] font-semibold tracking-[0.18em] text-white/45">技术选型决策树</p><h3 className="mt-5 text-3xl font-medium tracking-[-0.04em]">从问题特征开始，而不是先选模型</h3><div className="mt-8 space-y-3 text-sm"><div className="rounded-2xl bg-white/10 p-4">客户问题是否依赖私有知识？</div><div className="ml-5 border-l border-white/20 pl-4"><p className="text-white/55">否 → 通用 LLM / Web Search</p><p className="mt-3 rounded-xl bg-white/10 p-3">是 → 知识是否频繁变化？</p><div className="ml-4 mt-3 border-l border-white/20 pl-4"><p className="text-[#c7ff4d]">是 → RAG</p><p className="mt-3 text-white/55">否 → 是否需要改变固定行为模式？</p><p className="mt-2 text-[#c7ff4d]">是 → Fine-tuning</p></div></div><div className="grid gap-2 border-t border-white/10 pt-4 sm:grid-cols-3"><p>多步骤任务 → Agent</p><p>扫描文件 → OCR</p><p>实时外部数据 → Web Search</p></div></div>
       </div>
-    </div></section>
-
-    <section id="business-thinking" className="scroll-mt-[172px] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">
-      <SectionHeading index="03" title="从业务问题到 POC" description="展示我如何从客户问题拆解到可验证方案。" />
-      <div className="mt-12 overflow-hidden rounded-[28px] border border-black/5 bg-white"><div className="overflow-x-auto"><table className="min-w-[780px] w-full text-left"><thead className="bg-[#f7f8f9] text-xs font-medium text-neutral-500"><tr><th className="w-[14%] px-6 py-4">业务场景</th><th className="w-[30%] px-6 py-4">客户问题</th><th className="w-[28%] px-6 py-4">我的判断</th><th className="w-[28%] px-6 py-4">POC 验证重点</th></tr></thead><tbody className="divide-y divide-black/5">{problemToPoc.map(({ title, problems, judgment, focus }) => <tr key={title} className="align-top transition-colors hover:bg-[#f7ffe8]"><th className="px-6 py-6"><span className="inline-flex rounded-full bg-[#c7ff4d] px-3 py-1.5 text-sm font-medium text-neutral-950">{title}</span></th><td className="px-6 py-6"><ul className="space-y-2 text-sm leading-6 text-neutral-600">{problems.map((item) => <li key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c7ff4d]" />{item}</li>)}</ul></td><td className="px-6 py-6 text-sm leading-7 text-neutral-700">{judgment}</td><td className="px-6 py-6"><div className="flex flex-wrap gap-2">{focus.map((item) => <span key={item} className="rounded-full bg-[#f7f8f9] px-3 py-1.5 text-xs text-neutral-600">{item}</span>)}</div></td></tr>)}</tbody></table></div></div>
     </div></section>
 
     <section id="solution-architecture" className="scroll-mt-[172px] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">
       <SectionHeading index="04" title="技术选型与方案架构" description="选什么，更要说清为什么这样选；数据流和证据链共同保证方案可以解释、复核和迭代。" />
       <div className="mt-12 grid gap-5">{comparisons.map((comparison) => <ComparisonTable key={comparison.title} {...comparison} />)}</div>
       <SolutionArchitectureDiagrams />
+    </div></section>
+
+    <section id="business-thinking" className="scroll-mt-[172px] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">
+      <SectionHeading index="03" title="从业务问题到 POC" description="展示我如何从客户问题拆解到可验证方案。" />
+      <div className="mt-12 overflow-hidden rounded-[28px] border border-black/5 bg-white"><div className="overflow-x-auto"><table className="min-w-[780px] w-full text-left"><thead className="bg-[#f7f8f9] text-xs font-medium text-neutral-500"><tr><th className="w-[14%] px-6 py-4">业务场景</th><th className="w-[30%] px-6 py-4">客户问题</th><th className="w-[28%] px-6 py-4">我的判断</th><th className="w-[28%] px-6 py-4">POC 验证重点</th></tr></thead><tbody className="divide-y divide-black/5">{problemToPoc.map(({ title, problems, judgment, focus }) => <tr key={title} className="align-top transition-colors hover:bg-[#f7ffe8]"><th className="px-6 py-6"><span className="inline-flex rounded-full bg-[#c7ff4d] px-3 py-1.5 text-sm font-medium text-neutral-950">{title}</span></th><td className="px-6 py-6"><ul className="space-y-2 text-sm leading-6 text-neutral-600">{problems.map((item) => <li key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c7ff4d]" />{item}</li>)}</ul></td><td className="px-6 py-6 text-sm leading-7 text-neutral-700">{judgment}</td><td className="px-6 py-6"><div className="flex flex-wrap gap-2">{focus.map((item) => <span key={item} className="rounded-full bg-[#f7f8f9] px-3 py-1.5 text-xs text-neutral-600">{item}</span>)}</div></td></tr>)}</tbody></table></div></div>
     </div></section>
 
     <section id="value-validation" className="scroll-mt-[172px] bg-[#f7f8f9] py-20 lg:scroll-mt-[124px] lg:py-28"><div className="mx-auto max-w-7xl px-5 lg:px-8">

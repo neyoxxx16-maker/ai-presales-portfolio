@@ -19,12 +19,10 @@ export function Hero() {
             <span>2027届 · 数字媒体技术</span>
           </div>
 
-          <div className="mx-auto mt-24 max-w-4xl text-center lg:mt-28">
+          <div className="mx-auto mt-32 max-w-[1280px] text-center lg:mt-36">
             <p className="mb-5 text-sm font-medium text-white/80">AI售前 / 解决方案工程师</p>
-            <h1 data-hero-reveal className="text-balance text-5xl font-medium leading-[1.06] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
-              把 AI 能力变成真正
-              <br />
-              可落地的解决方案
+            <h1 data-hero-reveal className="whitespace-nowrap text-5xl font-medium leading-[1.06] tracking-[-0.03em] sm:text-6xl lg:text-7xl">
+              把AI做成客户看得懂、能验证的方案
             </h1>
             <p data-hero-reveal className="mx-auto mt-7 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
               从需求澄清、架构设计到可交互 Demo 与 POC 验证，
@@ -33,12 +31,12 @@ export function Hero() {
 
             <div data-hero-reveal className="mt-8 flex flex-wrap justify-center gap-3">
               <Link href="/demo/tea-assistant" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black">
-                体验 AI 导购 <ArrowRight className="button-arrow" size={16} />
+                体验项目一：AI 导购 <ArrowRight className="button-arrow" size={16} />
               </Link>
-              <Link href="/resume" className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/15 px-5 py-3 text-sm font-medium text-white backdrop-blur">
+              <Link href="/resume" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/20">
                 查看在线简历
               </Link>
-              <Link href="/solutions" className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/15 px-5 py-3 text-sm font-medium text-white backdrop-blur">
+              <Link href="/solutions" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/20">
                 查看方案成果 <ArrowRight className="button-arrow" size={16} />
               </Link>
             </div>

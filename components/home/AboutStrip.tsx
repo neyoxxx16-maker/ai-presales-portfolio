@@ -12,8 +12,8 @@ export function AboutStrip() {
           </Link>
         </div>
         <div>
-          <h2 className="text-4xl font-medium leading-[1.08] tracking-[-0.05em] sm:text-5xl lg:text-6xl">这是我的求职作品，也是一次完整的 Vibe Coding 实践。</h2>
-          <p className="mt-6 max-w-3xl text-base leading-8 text-neutral-500">网站会持续补充真实项目资料、架构图、POC测试、演示脚本与代码仓库，让面试中的“我会”变成“我可以直接给您看”。</p>
+          <h2 className="text-4xl font-medium leading-[1.08] tracking-[-0.05em] sm:text-5xl lg:text-6xl">这是我的求职作品，也是一次完整的 Vibe Coding 实践</h2>
+          <p className="mt-6 max-w-3xl text-base leading-8 text-neutral-500">网站会持续更新真实项目资料、架构图和测试结果。</p>
         </div>
       </div>
     </section>

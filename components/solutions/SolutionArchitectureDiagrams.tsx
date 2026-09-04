@@ -15,7 +15,7 @@ function Layer({ label, children, tone = "light" }: { label: string; children: R
 export function SolutionArchitectureDiagrams() {
   return <div className="mt-20 space-y-5">
     <article className="overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 sm:p-8">
-      <div className="max-w-3xl"><p className="section-kicker">System Architecture</p><h3 className="mt-4 text-3xl font-medium tracking-[-0.04em]">AI 导购 · 系统架构</h3><p className="mt-4 rounded-2xl bg-[#efffd0] px-4 py-3 text-sm font-medium leading-6 text-neutral-900">不是普通聊天框，而是基于真实产品知识库的可解释知识服务 POC。</p></div>
+      <div className="max-w-3xl"><p className="section-kicker">System Architecture</p><h3 className="mt-4 text-3xl font-medium tracking-[-0.04em]">项目一：AI 导购 · 系统架构</h3><p className="mt-4 rounded-2xl bg-[#efffd0] px-4 py-3 text-sm font-medium leading-6 text-neutral-900">不是普通聊天框，而是基于真实产品知识库的可解释知识服务 POC。</p></div>
       <div className="mt-8 space-y-3">
         <Layer label="01 用户交互层"><div className="mt-3 flex flex-col gap-2 text-sm font-medium text-neutral-800 sm:flex-row sm:items-center"><FlowChip>用户提问 / 产品咨询 / 场景需求</FlowChip><ArrowRight className="hidden text-neutral-300 sm:block" size={15} /><FlowChip>对话式 Web Demo</FlowChip><ArrowRight className="hidden text-neutral-300 sm:block" size={15} /><FlowChip>商品推荐 + 产品问答 + 来源引用</FlowChip></div></Layer>
         <Layer label="02 AI 核心能力层"><div className="mt-3 flex flex-wrap items-center gap-2"><FlowChip>意图识别</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip>Query 重写</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip highlight>RAG 检索</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip>商品信息匹配</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip>推荐边界判断</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip>DeepSeek / LLM 生成</FlowChip><ArrowRight className="text-neutral-300" size={14} /><FlowChip>可解释回答</FlowChip></div></Layer>
@@ -25,7 +25,7 @@ export function SolutionArchitectureDiagrams() {
     </article>
 
     <article className="overflow-hidden rounded-[28px] border border-black/5 bg-white p-6 sm:p-8">
-      <div className="max-w-3xl"><p className="section-kicker">System Architecture</p><h3 className="mt-4 text-3xl font-medium tracking-[-0.04em]">招投标 Agent · 系统架构</h3><p className="mt-4 text-sm leading-7 text-neutral-500">文档解析、Hybrid RAG、Agent Tool Calling、Evidence 与外部检索共同构成可复核的判断系统。</p></div>
+      <div className="max-w-3xl"><p className="section-kicker">System Architecture</p><h3 className="mt-4 text-3xl font-medium tracking-[-0.04em]">项目二：招投标 Agent · 系统架构</h3><p className="mt-4 text-sm leading-7 text-neutral-500">文档解析、Hybrid RAG、Agent Tool Calling、Evidence 与外部检索共同构成可复核的判断系统。</p></div>
       <div className="mt-8 grid gap-3 lg:grid-cols-[1fr_220px]">
         <div className="space-y-3">
           <Layer label="01 输入层"><div className="mt-3 flex flex-wrap gap-2"><FlowChip>招标文件 · PDF / Word / 扫描件</FlowChip><FlowChip>企业资料 · 资质 / 案例 / 产品能力</FlowChip><FlowChip>用户问题 · 能不能投 / 有哪些风险 / 还缺什么</FlowChip></div></Layer>

@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation";
 const navItems = [
   ["首页", "/"],
   ["在线简历", "/resume"],
-  ["AI导购", "/demo/tea-assistant"],
-  ["招投标 Agent", "/demo/tender-agent"],
+  ["项目一：AI 导购", "/demo/tea-assistant"],
+  ["项目二：招投标 Agent", "/demo/tender-agent"],
   ["方案展示", "/solutions"],
 ] as const;
 
@@ -46,7 +46,7 @@ export function Navbar() {
           href="/demo/tender-agent"
           className="inline-flex items-center gap-2 rounded-full bg-[#c7ff4d] px-4 py-2 text-sm font-medium text-black transition duration-300 hover:translate-y-[-1px]"
         >
-          体验招投标 Agent <ArrowUpRight className="button-arrow" size={15} />
+          体验项目二：招投标 Agent <ArrowUpRight className="button-arrow" size={15} />
         </Link>
       </div>
       <nav aria-label="移动端主导航" className="flex gap-5 overflow-x-auto border-t border-black/[0.04] px-5 pb-3 pt-2 text-xs text-neutral-600 lg:hidden">

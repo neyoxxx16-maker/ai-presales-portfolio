@@ -20,5 +20,6 @@ data/generated/*
 !data/generated/
 !data/generated/tea-vector-index-production-512.json
 storage/tender-company/
+storage/tender-uploads/
 .vercel
 .env*

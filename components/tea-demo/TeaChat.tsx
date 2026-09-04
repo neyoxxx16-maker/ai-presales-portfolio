@@ -9,10 +9,10 @@ import { SourceList } from "@/components/tea-demo/SourceList";
 import type { ChatMessage, ExecutionStep, TeaConversationState } from "@/types/tea";
 
 const exampleQuestions = [
-  "预算 500 元，想送长辈，喜欢清香一点，有什么推荐？",
-  "桂花红茶适合什么人？",
-  "龙井应该怎么冲泡？",
-  "你们有哪些适合送礼的产品？",
+  "预算 500，送长辈，有什么推荐？",
+  "我想喝红茶，小一点的",
+  "不要礼盒，200 以内推荐什么？",
+  "桂花的都有什么？",
 ];
 
 export function TeaChat() {
@@ -61,8 +61,8 @@ export function TeaChat() {
   }
 
   return (
-    <section id="online-demo" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-24 lg:px-8 lg:py-32">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><p className="section-kicker">在线 AI 导购 Demo</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">用一个真实问题，体验这条 POC 链路。</h2></div><p className="max-w-md text-sm leading-7 text-neutral-500">结构化业务规则保证价格与推荐边界；配置实时 RAG 后，模型仅基于检索资料组织自然回答并展示来源。</p></div>
+    <section id="online-demo" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-20 lg:px-8 lg:py-24">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><p className="section-kicker">你可以直接试试</p><h2 className="mt-5 text-4xl font-medium tracking-[-0.045em] sm:text-5xl">从一个真实问题开始选茶。</h2></div><p className="max-w-md text-sm leading-7 text-neutral-500">输入预算、送礼对象或口味偏好，AI 导购会从当前商品资料中为你筛选。</p></div>
       <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(330px,0.6fr)] lg:items-start">
         <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-soft">
           <div className="flex items-center justify-between border-b border-black/5 bg-[#f7f8f9] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white"><Bot size={16} /></span><div><p className="text-sm font-medium">一叶春山 · 知识库导购</p><p className="mt-0.5 text-xs text-neutral-500">当前版本 · 项目资料 POC</p></div></div><span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] text-neutral-500">{responseMode === "live-rag" ? "实时 Hybrid RAG" : responseMode === "rag-unavailable" ? "RAG 不可用" : responseMode === "fallback" ? "本地兜底" : "结构化检索"}</span></div>
@@ -75,7 +75,7 @@ export function TeaChat() {
           </div>
           <div className="border-t border-black/5 bg-[#f7f8f9] p-4 sm:p-5">
             <div className="flex flex-wrap gap-2">{exampleQuestions.map((question) => <button key={question} type="button" onClick={() => setInput(question)} className="rounded-full border border-black/10 bg-white px-3 py-2 text-left text-xs leading-5 text-neutral-600 transition hover:border-black/30 hover:text-black">{question}</button>)}</div>
-            <div className="mt-4 flex gap-3 rounded-2xl border border-black/10 bg-white p-2 pl-4"><input value={input} disabled={isSending} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitQuestion(); }} placeholder="输入选茶、产品或冲泡问题…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 disabled:opacity-50" aria-label="输入问题" /><button type="button" disabled={isSending} onClick={submitQuestion} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-white transition hover:bg-neutral-800 disabled:opacity-50" aria-label="发送问题"><ArrowUp size={17} /></button></div>
+            <div className="mt-4 flex gap-3 rounded-2xl border border-black/10 bg-white p-2 pl-4"><input id="tea-assistant-input" value={input} disabled={isSending} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitQuestion(); }} placeholder="输入选茶、产品或冲泡问题…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 disabled:opacity-50" aria-label="输入问题" /><button type="button" disabled={isSending} onClick={submitQuestion} className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-xl bg-[#c7ff4d] px-3 text-xs font-semibold text-black transition hover:bg-[#b8ed3f] disabled:opacity-50" aria-label="发送问题"><span>发送</span><ArrowUp size={15} /></button></div>
           </div>
         </div>
         <ExecutionPanel steps={steps} />

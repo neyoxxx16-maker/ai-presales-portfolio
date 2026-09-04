@@ -42,7 +42,7 @@ export function SolutionDeliveryCenter() {
                 <a role="menuitem" href={siteConfig.links.resumePdf} download onClick={() => setContactOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-[#f7f8f9]"><span className="flex items-center gap-2"><Download size={15} />下载 PDF 简历</span><Download size={14} /></a>
               </div>}
             </div>
-            <Link href="/demo/tender-agent" className="rounded-full border border-white/20 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">查看招投标 Agent <ArrowUpRight className="ml-1 inline" size={14} /></Link>
+            <Link href="/demo/tender-agent" className="rounded-full border border-white/20 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">查看项目二：招投标 Agent <ArrowUpRight className="ml-1 inline" size={14} /></Link>
           </div>
         </div>
       </div>

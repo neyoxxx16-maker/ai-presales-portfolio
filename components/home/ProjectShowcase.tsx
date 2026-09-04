@@ -4,14 +4,14 @@ import { ArrowUpRight } from "lucide-react";
 const projects = [
   {
     no: "01",
-    title: "一叶春山 AI 导购 / 客服知识库",
+    title: "项目一：AI 导购",
     desc: "围绕选茶推荐与产品问答，展示商品知识检索、来源引用与 POC 验证。",
     tags: ["RAG", "Knowledge Base", "POC"],
     href: "/demo/tea-assistant",
   },
   {
     no: "02",
-    title: "AI 招投标与方案生成 Agent",
+    title: "项目二：招投标 Agent",
     desc: "让 Agent 自动解析招标文件，调用企业知识与工具完成需求提取、资格匹配、偏离分析和技术响应建议。",
     tags: ["Agent", "Tool Calling", "RAG", "OCR"],
     href: "/demo/tender-agent",
@@ -25,9 +25,9 @@ export function ProjectShowcase() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="section-kicker">核心项目</p>
-            <h2 className="mt-4 max-w-3xl text-4xl font-medium tracking-[-0.045em] sm:text-5xl">不是两张项目介绍图，而是两个可现场体验的 AI 场景</h2>
+            <h2 className="mt-4 max-w-3xl text-4xl font-medium tracking-[-0.045em] sm:text-5xl">不是一个PPT，是一个能点的Demo</h2>
           </div>
-          <p className="max-w-md text-sm leading-7 text-neutral-500">一个偏对话式知识服务，一个偏工作流自动化，分别证明不同的售前方案能力。</p>
+          <p className="max-w-md text-sm leading-7 text-neutral-500">一个做对话式知识问答，一个做流程自动化，两个项目拼在一起，就是完整的售前方案能力。</p>
         </div>
 
         <div data-reveal-group className="mt-14 grid gap-5 lg:mt-16 lg:grid-cols-2">
