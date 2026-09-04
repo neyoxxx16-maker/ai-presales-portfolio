@@ -7,7 +7,9 @@ import { loadTeaVectorIndex, RAG_CONFIG, searchTeaVectorIndex } from "@/lib/rag/
 import type { GroundedOutput, RagRequest } from "@/lib/rag/types";
 import type { TeaAnswer, TeaResponseMode, TeaTurnResult } from "@/types/tea";
 
-const ragIntents = new Set(["product_question", "product_fit", "product_compare", "brewing_question", "brand_question", "product_recommendation"]);
+// SKU recommendation, counting and filtering use the deterministic structured catalog.
+// RAG remains available for explanatory tea knowledge, but may not replace SKU routing.
+const ragIntents = new Set(["product_question", "product_fit", "product_compare", "brewing_question", "brand_question"]);
 const categoryByIntent: Record<string, string[]> = { brewing_question: ["brewing"], product_question: ["tea_type"], product_fit: ["tea_type", "recommendation"], product_compare: ["tea_type"], brand_question: ["brand_profile"], product_recommendation: ["tea_type", "recommendation"] };
 const unique = <T,>(items: T[]) => [...new Set(items)];
 
@@ -98,7 +100,7 @@ export async function enhanceWithLiveRag(query: string, turn: TeaTurnResult) {
       output = validateGroundedOutput(await deepSeekProvider.generate(repairPrompt, query), request);
     }
     if (!output) return strict ? ragUnavailable(turn.answer, "RAG_UNAVAILABLE", "DeepSeek 输出未通过引用与结构化事实校验。") : withMode(turn.answer, "fallback");
-    const sources = output.citations.map((id) => teaKnowledge.find((document) => document.id === id)).filter((document): document is NonNullable<typeof document> => Boolean(document)).map((document) => ({ ...document, score: 100, matchReasons: ["实时 RAG 引用"] }));
+    const sources = output.citations.map((id) => teaKnowledge.find((document) => document.id === (id.startsWith("SKU-") ? "KB006" : id))).filter((document): document is NonNullable<typeof document> => Boolean(document)).map((document) => ({ ...document, score: 100, matchReasons: ["实时 RAG 引用"] }));
     return { ...withMode(addHybridTrace(turn.answer, retrieval), "live-rag"), answer: output.followUp ? `${output.answer}\n${output.followUp}` : output.answer, sources, ragStatus: retrieval.hybridActive ? "HYBRID_RAG_ACTIVE" : undefined };
   } catch (error) {
     if (isStrictProductionRag()) return ragUnavailable(turn.answer, "RAG_UNAVAILABLE", error instanceof Error ? error.message : "Remote Embedding 或 RAG Provider 不可用。");

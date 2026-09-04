@@ -21,7 +21,7 @@ function requestedCatalogTerm(query: string) {
 }
 
 function entitySummary(entities: TeaEntities) {
-  return [entities.budget !== undefined && `预算：¥${entities.budget}`, entities.scene && `场景：${entities.scene}`, entities.audience && `对象：${entities.audience}`, entities.preference && `偏好：${entities.preference}`, entities.requiredTeaTypes?.length && `限定茶类：${entities.requiredTeaTypes.join("/")}`, entities.packaging && `规格需求：${entities.packaging}`].filter(Boolean).join(" · ") || "未提取到明确偏好";
+  return [entities.budget !== undefined && `预算：¥${entities.budget}`, entities.scene && `场景：${entities.scene}`, entities.audience && `对象：${entities.audience}`, entities.preference && `偏好：${entities.preference}`, entities.requiredTeaTypes?.length && `限定茶类：${entities.requiredTeaTypes.join("/")}`, entities.exactWeightGrams !== undefined && `净含量：${entities.exactWeightGrams}g`, entities.requiredPackaging && `包装：${entities.requiredPackaging}`, entities.excludedPackaging?.length && `排除包装：${entities.excludedPackaging.join("/")}`].filter(Boolean).join(" · ") || "未提取到明确偏好";
 }
 
 function sourceById(...ids: string[]): RetrievedKnowledge[] {
@@ -112,7 +112,11 @@ function isHardExcluded(sku: TeaSku, entities: TeaEntities) {
   if (entities.excludedProductIds?.some((id) => sku.productIds.includes(id))) return true;
   if (entities.excludedTeaTypes?.some((category) => products.some((product) => product.category === category))) return true;
   if (entities.excludedFlavors?.some((term) => products.some((product) => product.flavor.some((flavor) => flavor.includes(term))))) return true;
+  // 业务事实：现有 11 个 SKU 都基于龙井相关原料制作；这是原料层规则，
+  // 不能通过商品名称或成品茶类做 substring 推断。
+  if (entities.excludedIngredients?.includes("龙井")) return true;
   if (entities.excludedIngredients?.some((term) => products.some((product) => product.ingredients?.some((ingredient) => ingredient.includes(term))))) return true;
+  if (entities.excludedPackaging?.includes(sku.packaging)) return true;
   return false;
 }
 
@@ -122,21 +126,97 @@ function matchesHardInclusion(sku: TeaSku, entities: TeaEntities) {
   return products.length > 0 && products.every((product) => entities.requiredTeaTypes?.includes(product.category));
 }
 
-function selectRecommendationSkus(entities: TeaEntities) {
+function filterCatalogSkus(entities: TeaEntities, giftOnly = false, options: { ignoreWeight?: boolean } = {}) {
   let candidates = teaSkus.filter((sku) => Boolean(priceForSku(sku)));
+  if (giftOnly) candidates = candidates.filter((sku) => sku.packaging === "礼盒");
   candidates = candidates.filter((sku) => !isHardExcluded(sku, entities));
   candidates = candidates.filter((sku) => matchesHardInclusion(sku, entities));
+  if (entities.includedTeaTypes?.length) {
+    candidates = candidates.filter((sku) => sku.productIds.some((id) => entities.includedTeaTypes?.includes(teaProducts.find((product) => product.id === id)?.category ?? "绿茶")));
+  }
+  if (entities.includedProductIds?.length) candidates = candidates.filter((sku) => sku.productIds.some((id) => entities.includedProductIds?.includes(id)));
   if (entities.budget !== undefined) candidates = candidates.filter((sku) => (priceForSku(sku)?.amount ?? Infinity) <= entities.budget!);
-  if (entities.scene === "送礼") candidates = candidates.filter((sku) => sku.packaging === "礼盒");
-  if (entities.scene === "自饮") candidates = candidates.filter((sku) => sku.packaging !== "礼盒");
-  if (entities.packaging === "试饮装") candidates = candidates.filter((sku) => sku.packaging === "试饮装");
-  if (entities.packaging === "单盒 / 单罐装") candidates = candidates.filter((sku) => sku.packaging === "单盒 / 单罐装");
-  if (entities.productIds?.length) candidates = candidates.filter((sku) => sku.productIds.some((id) => entities.productIds?.includes(id)));
-  return candidates.sort((left, right) => preferenceScore(right, entities.preference) - preferenceScore(left, entities.preference) || (priceForSku(left)?.amount ?? Infinity) - (priceForSku(right)?.amount ?? Infinity)).slice(0, 3);
+  if (entities.requiredPackaging) candidates = candidates.filter((sku) => sku.packaging === entities.requiredPackaging);
+  if (entities.packageType) candidates = candidates.filter((sku) => sku.packageType === entities.packageType);
+  if (!options.ignoreWeight && entities.exactWeightGrams !== undefined) candidates = candidates.filter((sku) => sku.netWeightGrams === entities.exactWeightGrams);
+  if (!options.ignoreWeight && entities.maxWeightGrams !== undefined) candidates = candidates.filter((sku) => sku.netWeightGrams <= entities.maxWeightGrams!);
+  if (entities.productIds?.length) candidates = candidates.filter((sku) => entities.productIds!.length > 1
+    ? entities.productIds!.every((id) => sku.productIds.includes(id))
+    : sku.productIds.includes(entities.productIds![0]));
+  return candidates;
+}
+
+function hardConstraintSummary(entities: TeaEntities) {
+  const constraints = [
+    entities.exactWeightGrams !== undefined && `${entities.exactWeightGrams}g规格`,
+    entities.maxWeightGrams !== undefined && `不超过${entities.maxWeightGrams}g`,
+    entities.requiredPackaging && entities.requiredPackaging,
+    entities.packageType && entities.packageType,
+    entities.excludedPackaging?.length && `不含${entities.excludedPackaging.join("/")}`,
+    entities.excludedIngredients?.length && `排除原料${entities.excludedIngredients.join("/")}`,
+    entities.budget !== undefined && `¥${entities.budget}预算`,
+  ].filter(Boolean);
+  return constraints.join("、") || "当前条件";
+}
+
+function noMatchingSkuAnswer(entities: TeaEntities, giftOnly = false): TeaAnswer {
+  if (entities.excludedIngredients?.includes("龙井")) return {
+    answer: "目前店内没有符合这一条件的产品。现有 11 个 SKU 均基于龙井相关原料制作；如果你只是不想喝龙井绿茶成品，我可以继续为你筛选红茶。",
+    recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution(giftOnly ? "gift_catalog" : "product_recommendation", "原料级排除：龙井", 1, 0),
+  };
+  const alternatives = filterCatalogSkus(entities, giftOnly, { ignoreWeight: true }).slice(0, 3);
+  const exactWeightOnly = entities.exactWeightGrams !== undefined;
+  const alternateText = alternatives.length && exactWeightOnly
+    ? ` 接近规格可参考${alternatives.map((sku) => `${sku.name}（${sku.netContent}）`).join("、")}；这些仅是放宽规格后的备选，不符合${entities.exactWeightGrams}g条件。`
+    : "";
+  return {
+    answer: `按${hardConstraintSummary(entities)}筛选，当前已收录的11个具体 SKU 中没有完全符合的商品。${alternateText}`,
+    recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution(giftOnly ? "gift_catalog" : "product_recommendation", `硬过滤无结果：${hardConstraintSummary(entities)}`, 1, 0),
+  };
+}
+
+function recommendationScore(sku: TeaSku, entities: TeaEntities) {
+  let score = preferenceScore(sku, entities.preference);
+  if (entities.productIds?.some((id) => sku.productIds.includes(id))) score += 30;
+  if (entities.packageType === sku.packageType) score += 24;
+  if (entities.netContent === sku.netContent) score += 24;
+  if (entities.scene === "送礼" && sku.packaging === "礼盒") score += 18;
+  if (entities.scene === "送礼" && sku.packaging !== "礼盒") score += 8;
+  if (entities.scene === "送礼" && sku.packageType === "试饮装") score -= 12;
+  if (entities.scene === "自饮" && sku.packaging !== "礼盒") score += 18;
+  if (entities.scene === "试饮" && sku.packageType === "试饮装") score += 24;
+  if (entities.sizePreference === "small") score += Math.max(0, 18 - Math.round(sku.netWeightGrams / 10));
+  if (entities.sizePreference === "large") score += Math.round(sku.netWeightGrams / 10);
+  // Budget is a ceiling, then a soft utilization signal: absent stronger preferences,
+  // a product close to the stated ceiling ranks ahead of a cheap but less fitting SKU.
+  if (entities.budget !== undefined) score += Math.round(Math.min(1, (priceForSku(sku)?.amount ?? 0) / Math.max(entities.budget, 1)) * 18);
+  return score;
+}
+
+function selectRecommendationSkus(entities: TeaEntities) {
+  const candidates = filterCatalogSkus(entities);
+  const highlySpecific = Boolean(entities.productIds?.length && (entities.packageType || entities.netContent || entities.scene));
+  const limit = entities.recommendationLimit ?? (highlySpecific ? 2 : 4);
+  return [...candidates].sort((left, right) => recommendationScore(right, entities) - recommendationScore(left, entities) || (priceForSku(left)?.amount ?? Infinity) - (priceForSku(right)?.amount ?? Infinity) || left.id.localeCompare(right.id)).slice(0, limit);
 }
 
 function hasEnoughRecommendationSignals(entities: TeaEntities) {
-  return Boolean(entities.productIds?.length || entities.budget !== undefined || entities.requiredTeaTypes?.length || entities.excludedProductIds?.length || (entities.scene && entities.preference) || (entities.scene && entities.teaType));
+  return Boolean(entities.productIds?.length || entities.includedProductIds?.length || entities.includedTeaTypes?.length || entities.packageType || entities.requiredPackaging || entities.excludedPackaging?.length || entities.netContent || entities.exactWeightGrams !== undefined || entities.maxWeightGrams !== undefined || entities.budget !== undefined || entities.requiredTeaTypes?.length || entities.excludedProductIds?.length || entities.scene || entities.preference);
+}
+
+function recommendationReason(sku: TeaSku, entities: TeaEntities) {
+  const reasons: string[] = [];
+  if (entities.packageType === sku.packageType || entities.netContent === sku.netContent) reasons.push(`${sku.netContent}${sku.packageType}`);
+  if (entities.exactWeightGrams === sku.netWeightGrams) reasons.push(`符合${sku.netWeightGrams}g规格`);
+  if (entities.scene === "送礼" && sku.packaging === "礼盒") reasons.push("适合正式送礼");
+  if (entities.scene === "送礼" && sku.packaging !== "礼盒") reasons.push("适合作为轻礼");
+  if (entities.scene === "自饮" && sku.packaging !== "礼盒") reasons.push("适合日常自饮");
+  if (entities.preference && preferenceScore(sku, entities.preference) > 0) reasons.push(`贴合${entities.preference}偏好`);
+  if (entities.sizePreference === "small") reasons.push("规格较小，适合小包装偏好");
+  if (entities.sizePreference === "large") reasons.push("规格较大，贴近大包装偏好");
+  if (entities.budget !== undefined && (priceForSku(sku)?.amount ?? 0) / entities.budget >= 0.7) reasons.push("价格接近预算上限");
+  if (entities.productIds?.some((id) => sku.productIds.includes(id))) reasons.push("符合指定茶品");
+  return reasons.slice(0, 2).join("、") || `${sku.spec}，${sku.netContent}`;
 }
 
 function bestFitProduct(retrievalProducts: RetrievedProduct[], entities: TeaEntities) {
@@ -305,22 +385,23 @@ export function buildTeaAnswer(query: string, context?: TeaConversationContext, 
   }
   if (intentResult.intent === "gift_catalog" || intentResult.intent === "product_browse") {
     const isGiftCatalog = intentResult.intent === "gift_catalog";
-    let catalog = teaSkus.filter((sku) => isGiftCatalog ? sku.packaging === "礼盒" : true);
-    catalog = catalog.filter((sku) => !isHardExcluded(sku, entities) && matchesHardInclusion(sku, entities));
-    if (entities.budget !== undefined) catalog = catalog.filter((sku) => (priceForSku(sku)?.amount ?? Infinity) <= entities.budget!);
+    const catalog = filterCatalogSkus(entities, isGiftCatalog);
     const catalogSkus = catalog.map((sku) => asRetrievedSku(sku, isGiftCatalog ? "当前可选礼盒" : "当前可选商品"));
-    const answer = catalogSkus.length ? entities.budget !== undefined ? `在 ¥${entities.budget} 预算以内，当前资料中有 ${catalogSkus.length} 款价格已明确的${isGiftCatalog ? "礼盒" : "商品"}可供参考。你也可以再告诉我偏好鲜爽、花香、蜜香或醇厚，我会继续帮你缩小到1～2款。` : `当前资料中可识别的${isGiftCatalog ? "送礼礼盒" : "商品"}如下。价格待确认的商品会明确标注；如果告诉我预算和口味偏好，我可以继续帮你筛选。` : `当前资料中没有同时满足该预算与规格条件、且价格已明确的${isGiftCatalog ? "礼盒" : "商品"}。你可以放宽预算，或告诉我更偏好的茶类与口味。`;
+    if (!catalogSkus.length) return noMatchingSkuAnswer(entities, isGiftCatalog);
+    const answer = entities.budget !== undefined ? `在 ¥${entities.budget} 预算以内，当前资料中有 ${catalogSkus.length} 款价格已明确的${isGiftCatalog ? "送礼礼盒" : "商品"}可供参考。你也可以再告诉我偏好鲜爽、花香、蜜香或醇厚，我会继续帮你缩小到最匹配的商品。` : `根据当前已收录的商品资料，共有 ${catalogSkus.length} 个具体 SKU${isGiftCatalog ? "符合送礼礼盒条件" : ""}。以下为符合当前条件的完整商品清单；包装形态本身不另计为商品。`;
     const sourceIds = isGiftCatalog ? ["KB006", "KB010"] : ["KB006"];
     return { answer, recommendations: productsForSkus(catalog), recommendationSkus: catalogSkus, sources: sourceById(...sourceIds), execution: completedExecution(intentResult.intent, entities.budget !== undefined ? `按 ¥${entities.budget} 预算筛选` : "展示当前可识别商品", sourceIds.length, catalogSkus.length) };
   }
   const exactSku = retrieval.skus.find((sku) => sku.score >= 16);
-  if (exactSku) return { answer: `${exactSku.name}：规格为 ${exactSku.spec}，${exactSku.netContent}，包装类型为${exactSku.packaging}。`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `匹配商品：${exactSku.name}`, 1, 1) };
+  // 只有知识问答才可直接用单个命中的 SKU 作说明；明确推荐意图必须继续进入
+  // 结构化筛选和排序，避免“250g 礼盒推荐一款”被错误降级为规格介绍。
+  if (exactSku && intentResult.intent !== "product_recommendation") return { answer: `${exactSku.name}：规格为 ${exactSku.spec}，${exactSku.netContent}，包装类型为${exactSku.packaging}。`, recommendations: [], recommendationSkus: [], sources: sourceById("KB006"), execution: completedExecution("product_question", `匹配商品：${exactSku.name}`, 1, 1) };
   if (intentResult.intent === "product_recommendation") {
     if (!hasEnoughRecommendationSignals(entities)) return { answer: "可以。主要是自己喝还是送礼？口味更喜欢鲜爽一点，还是花香 / 醇厚一点？", recommendations: [], recommendationSkus: [], sources: sourceById("KB010"), execution: completedExecution("product_recommendation", "推荐信息仍需补充", 1, 0) };
     const selectedSkus = selectRecommendationSkus(entities);
-    if (!selectedSkus.length) return { answer: "按你提供的条件，当前已录入且价格明确的正式商品里暂时没有合适选项。我不会用不符合茶类、偏好或价格条件的商品替代；你可以调整预算或补充想要的规格。", recommendations: [], recommendationSkus: [], sources: sourceById("KB006", "KB010"), execution: completedExecution("product_recommendation", "未找到同时满足硬条件的商品", 2, 0) };
+    if (!selectedSkus.length) return noMatchingSkuAnswer(entities);
     const selectedProductIds = unique(selectedSkus.flatMap((sku) => sku.productIds));
-    return { answer: `结合${entitySummary(entities)}，以下商品与已知偏好和预算更匹配。每项价格均只对应其列出的组合、规格与包装。`, recommendations: productsForSkus(selectedSkus), recommendationSkus: selectedSkus.map((sku) => asRetrievedSku(sku, "符合本轮硬条件、预算与口味偏好")), sources: productSources(selectedProductIds, true, true), execution: completedExecution("product_recommendation", entitySummary(entities), Math.min(3, selectedProductIds.length + 1), selectedSkus.length) };
+    return { answer: `结合${entitySummary(entities)}，优先推荐：${selectedSkus.map((sku) => `${sku.name}（${recommendationReason(sku, entities)}）`).join("；")}。每项价格只对应列出的组合、规格与包装。`, recommendations: productsForSkus(selectedSkus), recommendationSkus: selectedSkus.map((sku) => asRetrievedSku(sku, "符合本轮硬条件，并按茶品、包装、规格、场景和口味排序")), sources: productSources(selectedProductIds, true, true), execution: completedExecution("product_recommendation", entitySummary(entities), Math.min(3, selectedProductIds.length + 1), selectedSkus.length) };
   }
   if (intentResult.intent === "aftersales") return { answer: "储存建议低温、避光、密封、干燥并避免异味。发货、退款或拆封后的售后规则可能因具体商品和页面口径不同而变化；涉及具体订单或售后处理时，建议由人工客服确认。", recommendations: [], recommendationSkus: [], sources: sourceById("KB008", "KB009"), execution: completedExecution("aftersales", "匹配售后与边界资料", 2, 0) };
   if (retrieval.products.length) {
