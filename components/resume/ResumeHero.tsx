@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Download, GraduationCap, MapPin } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Eye, GraduationCap, MapPin } from "lucide-react";
 import { siteConfig } from "@/lib/site-config";
 
 const focusTags = ["需求分析", "RAG", "Agent", "Function Calling", "POC 验证", "Vibe Coding"];
@@ -29,7 +29,7 @@ export function ResumeHero() {
               </p>
               <div data-hero-reveal className="mt-7 flex flex-wrap gap-2.5 text-sm">
                 <Link href="/resume/pdf" className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2.5 font-medium text-white transition hover:bg-black/80">
-                  查看 PDF 简历 <Download className="button-arrow" size={14} />
+                  查看 PDF 简历 <Eye className="button-arrow" size={14} />
                 </Link>
                 <a href={siteConfig.links.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2.5 font-medium text-white transition hover:bg-white/20">
                   GitHub <ArrowUpRight className="button-arrow" size={14} />
